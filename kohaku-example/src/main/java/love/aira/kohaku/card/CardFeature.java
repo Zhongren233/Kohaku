@@ -1,23 +1,13 @@
 package love.aira.kohaku.card;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import love.aira.kohaku.api.model.Keyboard;
 import love.aira.kohaku.api.model.SendMessageRequest;
-import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.feature.BotFeature;
-import love.aira.kohaku.gateway.event.BotEvent;
-import org.springframework.context.annotation.Bean;
-import love.aira.kohaku.reply.BotReplies;
-import love.aira.kohaku.feature.ButtonContext;
+import love.aira.kohaku.feature.ButtonFeature;
 import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.support.Pagination;
-import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
-import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
-import love.aira.kohaku.gateway.handler.HandlerResult;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,8 +19,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class CardFeature {
-
-    private static final Logger log = LoggerFactory.getLogger(CardFeature.class);
 
     /** 功能标识，同时是按钮 data 的命名空间。 */
     public static final String ID = "card";
@@ -56,12 +44,6 @@ public class CardFeature {
             new Card("C-011", "项目看板", "进行中/待办/完成"),
             new Card("C-012", "复盘模板", "每周一次小复盘"));
 
-    private final BotReplies replies;
-
-    public CardFeature(BotReplies replies) {
-        this.replies = replies;
-    }
-
     /**
      * 渲染指定页（纯函数，便于测试）：markdown 文本 + 翻页键盘。
      *
@@ -86,50 +68,27 @@ public class CardFeature {
     }
 
     /**
-     * 装配为功能单元：一个命令入口（单聊/群聊各注册一次）+ 三个翻页按钮，全是 lambda。
-     *
-     * <p>函数式写法下消息入口的事件类型由参数给出（不用再写 {@code eventType()}），
-     * 功能 id 与按钮 action 在**装配期**校验（写错是启动失败，而不是首次点击才失败）。
+     * 装配为功能单元：命令入口 + 三个翻页按钮由 {@link ButtonFeature} 骨架生成，
+     * 本类只提供「文本 → 状态」与「状态 → 消息」两个纯函数。
      */
     @Bean
-    BotFeature card() {   // Bean 名取 card：避免与 @Component 的默认名 cardFeature 撞车
-        return BotFeature.of(ID)
-                .message(C2cMessageCreateEvent.class, event -> entry(event, content(event)))
-                .message(GroupAtMessageCreateEvent.class, event -> entry(event, content(event)))
-                .button(CardKeyboards.ACTION_NEXT, this::step)
-                .button(CardKeyboards.ACTION_PREV, this::step)
-                .button(CardKeyboards.ACTION_PAGE, this::step)
-                .build();
+    BotFeature card(BotReplies replies) {
+        return ButtonFeature.of(ID)
+                .commands(COMMAND)          // 入口命令：/card；不匹配的文本一律 IGNORED
+                .state(CardFeature::state)  // 文本 → 目标页码状态（null = 不是本功能的命令）
+                .render(CardFeature::page)  // 状态 → 消息：入口与按钮共用，两条路径渲染一致
+                .build(replies);
     }
 
-    /** 命令入口（单聊/群聊共用）：不是本功能的命令一律 {@code IGNORED}，交给后面的处理器。 */
-    private HandlerResult entry(BotEvent event, String content) {
+    /** 命令文本 → 按钮状态（只放渲染需要的页码）；不是本功能的命令返回 {@code null}。 */
+    static Map<String, String> state(String content) {
         int target = requestedPage(content);
-        if (target == 0) {
-            return HandlerResult.IGNORED;
-        }
-        replies.send(event, page(target));
-        return HandlerResult.CONSUMED;
+        return target == 0 ? null : Map.of(CardKeyboards.STATE_PAGE, Integer.toString(target));
     }
 
-    /**
-     * 翻页按钮：按钮 data 里携带的是**目标页码**（`CardKeyboards` 已算好，指令按钮 `/card next 2` 同理），
-     * 这里直接渲染目标页，不做加减 —— 重复点击/重放也是幂等的。
-     */
-    private HandlerResult step(ButtonContext context) {
-        int target = context.intState(CardKeyboards.STATE_PAGE, 1);
-        log.info("card 翻页 action={} target={} scene={} user={} group={}", context.action(), target, context.scene(),
-                context.userOpenid(), context.groupOpenid());
-        replies.send(context.interaction(), page(target));
-        return HandlerResult.CONSUMED;
-    }
-
-    private static String content(BotEvent event) {
-        return switch (event) {
-            case C2cMessageCreateEvent c2c -> c2c.payload() == null ? null : c2c.payload().content();
-            case GroupAtMessageCreateEvent group -> group.payload() == null ? null : group.payload().content();
-            default -> null;
-        };
+    /** 状态 → 消息（入口与按钮共用）。 */
+    static SendMessageRequest page(Map<String, String> state) {
+        return page(Integer.parseInt(state.getOrDefault(CardKeyboards.STATE_PAGE, "1")));
     }
 
     /** {@code /card} 或 {@code /card next 2} 等命令返回目标页码；不是本功能的命令返回 0。 */

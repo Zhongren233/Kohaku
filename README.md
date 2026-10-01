@@ -217,6 +217,22 @@ public class CardFeature {
 功能主体逻辑长（需要字段、多个私有方法）时，也可以照旧 `implements BotFeature` 手写三个方法：
 两种写法产出同一种东西，`InteractionRouter` 一视同仁。装配期就会校验 id 与 action 的合法性（写错启动即失败）。
 
+最常见的形态（**命令进入 + 按钮翻页/选择**）还有骨架 `ButtonFeature`：业务只写「文本 → 状态」与「状态 → 消息」
+两个纯函数，入口与按钮回调、被动回复由框架补齐。
+
+```java
+@Bean
+BotFeature card(BotReplies replies) {
+    return ButtonFeature.of("card")        // 默认入口命令 /card（.commands(...) 可换/加前缀）
+            .state(CardFeature::state)     // 文本 → 状态；返回 null 表示"不是我的命令" → IGNORED
+            .render(CardFeature::page)     // 状态 → 消息：入口与按钮**共用**，两条路径渲染一致
+            .build(replies);               // 默认动作 next/prev/page（.actions(...) 可换）
+}
+```
+
+状态即按钮 data 的 state 段（如 `p=2`），所以「点下一页」与「发 `/card next 2`」走同一条渲染路径，
+状态自描述、无会话，重复点击/平台重放天然幂等。命令前缀按「整词」匹配（`/card` 命中 `/card 3` 但不命中 `/cards`）。
+
 按钮 data 由 `FeatureKeyboards` 生成，格式 `featureId:action[:k=v;k=v]`（值 URL 编码），如 `card:next:p=2`；
 点击后 `data.resolved.button_data` **原样回传**，`InteractionRouter` 解析后投递给 `card` 功能的 `next` 处理器，
 因此翻页不会落到别的 handler。
@@ -269,7 +285,8 @@ public class PingHandler implements BotEventHandler<C2cMessageCreateEvent> {
 }
 ```
 
-**② 命令 + 按钮** —— 用 `BotFeature.of(id)` 函数式装配（`id` 即按钮 data 的命名空间）：
+**② 命令 + 按钮** —— 若是「命令进入 + 按钮翻页/选择」这种常见形态，直接用骨架 `ButtonFeature`
+（只写两个纯函数；示例见 `kohaku-example` 的 `CardFeature`）；需要自定义入口语义时再用 `BotFeature.of(id)`：
 
 ```java
 @Component

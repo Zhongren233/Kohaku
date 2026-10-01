@@ -32,7 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 class CardFeatureTest {
 
     private final BotReplies replies = mock(BotReplies.class);
-    private final BotFeature feature = new CardFeature(replies).card();
+    private final BotFeature feature = new CardFeature().card(replies);
     private final ArgumentCaptor<BotEvent> repliedEvent = ArgumentCaptor.forClass(BotEvent.class);
     private final ArgumentCaptor<SendMessageRequest> repliedRequest = ArgumentCaptor.forClass(SendMessageRequest.class);
 
