@@ -7,14 +7,14 @@ import love.aira.kohaku.api.model.Keyboard;
 import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.feature.BotFeature;
+import love.aira.kohaku.gateway.event.BotEvent;
+import org.springframework.context.annotation.Bean;
 import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.feature.ButtonContext;
 import love.aira.kohaku.reply.BotReplies;
-import love.aira.kohaku.feature.ButtonHandler;
 import love.aira.kohaku.support.Pagination;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
-import love.aira.kohaku.gateway.handler.BotEventHandler;
 import love.aira.kohaku.gateway.handler.HandlerResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component;
  * 状态（当前页）直接放在按钮 data 里（方案 A：自描述），机器人侧不保存会话。
  */
 @Component
-public class CardFeature implements BotFeature {
+public class CardFeature {
 
     private static final Logger log = LoggerFactory.getLogger(CardFeature.class);
 
@@ -62,11 +62,6 @@ public class CardFeature implements BotFeature {
         this.replies = replies;
     }
 
-    @Override
-    public String id() {
-        return ID;
-    }
-
     /**
      * 渲染指定页（纯函数，便于测试）：markdown 文本 + 翻页键盘。
      *
@@ -90,74 +85,50 @@ public class CardFeature implements BotFeature {
                         : CardKeyboards.commandPagination(ID, pagination));
     }
 
-    @Override
-    public List<BotEventHandler<?>> messageHandlers() {
-        return List.of(c2cEntry(), groupEntry());
+    /**
+     * 装配为功能单元：一个命令入口（单聊/群聊各注册一次）+ 三个翻页按钮，全是 lambda。
+     *
+     * <p>函数式写法下消息入口的事件类型由参数给出（不用再写 {@code eventType()}），
+     * 功能 id 与按钮 action 在**装配期**校验（写错是启动失败，而不是首次点击才失败）。
+     */
+    @Bean
+    BotFeature card() {   // Bean 名取 card：避免与 @Component 的默认名 cardFeature 撞车
+        return BotFeature.of(ID)
+                .message(C2cMessageCreateEvent.class, event -> entry(event, content(event)))
+                .message(GroupAtMessageCreateEvent.class, event -> entry(event, content(event)))
+                .button(CardKeyboards.ACTION_NEXT, this::step)
+                .button(CardKeyboards.ACTION_PREV, this::step)
+                .button(CardKeyboards.ACTION_PAGE, this::step)
+                .build();
     }
 
-    @Override
-    public List<ButtonHandler> buttonHandlers() {
-        return List.of(step(CardKeyboards.ACTION_NEXT), step(CardKeyboards.ACTION_PREV),
-                step(CardKeyboards.ACTION_PAGE));
+    /** 命令入口（单聊/群聊共用）：不是本功能的命令一律 {@code IGNORED}，交给后面的处理器。 */
+    private HandlerResult entry(BotEvent event, String content) {
+        int target = requestedPage(content);
+        if (target == 0) {
+            return HandlerResult.IGNORED;
+        }
+        replies.send(event, page(target));
+        return HandlerResult.CONSUMED;
     }
 
     /**
-     * 翻页按钮：按钮 data 里携带的是**目标页码**（`CardKeyboards` 已算好，
-     * 指令按钮 `/card next 2` 同理），这里直接渲染目标页，不再做加减 —— 这样重复点击/重放也是幂等的。
+     * 翻页按钮：按钮 data 里携带的是**目标页码**（`CardKeyboards` 已算好，指令按钮 `/card next 2` 同理），
+     * 这里直接渲染目标页，不做加减 —— 重复点击/重放也是幂等的。
      */
-    private ButtonHandler step(String action) {
-        return new ButtonHandler() {
-            @Override
-            public String action() {
-                return action;
-            }
-
-            @Override
-            public HandlerResult onButton(ButtonContext context) {
-                int target = context.intState(CardKeyboards.STATE_PAGE, 1);
-                log.info("card 翻页 action={} target={} scene={} chat={}", action, target, context.scene(),
-                        context.userOpenid() != null ? context.userOpenid() : context.groupOpenid());
-                replies.send(context.interaction(), page(target));
-                return HandlerResult.CONSUMED;
-            }
-        };
+    private HandlerResult step(ButtonContext context) {
+        int target = context.intState(CardKeyboards.STATE_PAGE, 1);
+        log.info("card 翻页 action={} target={} scene={} user={} group={}", context.action(), target, context.scene(),
+                context.userOpenid(), context.groupOpenid());
+        replies.send(context.interaction(), page(target));
+        return HandlerResult.CONSUMED;
     }
 
-    private BotEventHandler<C2cMessageCreateEvent> c2cEntry() {
-        return new BotEventHandler<>() {
-            @Override
-            public Class<C2cMessageCreateEvent> eventType() {
-                return C2cMessageCreateEvent.class;
-            }
-
-            @Override
-            public HandlerResult handle(C2cMessageCreateEvent event) {
-                int page = event.payload() == null ? 0 : requestedPage(event.payload().content());
-                if (page == 0) {
-                    return HandlerResult.IGNORED;   // 不是本功能的命令，交给后面的处理器
-                }
-                replies.send(event, page(page));
-                return HandlerResult.CONSUMED;
-            }
-        };
-    }
-
-    private BotEventHandler<GroupAtMessageCreateEvent> groupEntry() {
-        return new BotEventHandler<>() {
-            @Override
-            public Class<GroupAtMessageCreateEvent> eventType() {
-                return GroupAtMessageCreateEvent.class;
-            }
-
-            @Override
-            public HandlerResult handle(GroupAtMessageCreateEvent event) {
-                int page = event.payload() == null ? 0 : requestedPage(event.payload().content());
-                if (page == 0) {
-                    return HandlerResult.IGNORED;
-                }
-                replies.send(event, page(page));
-                return HandlerResult.CONSUMED;
-            }
+    private static String content(BotEvent event) {
+        return switch (event) {
+            case C2cMessageCreateEvent c2c -> c2c.payload() == null ? null : c2c.payload().content();
+            case GroupAtMessageCreateEvent group -> group.payload() == null ? null : group.payload().content();
+            default -> null;
         };
     }
 

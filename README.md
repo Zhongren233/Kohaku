@@ -194,13 +194,24 @@ kohaku:
 
 ```java
 @Component
-public class CardFeature implements BotFeature {
-    public String id() { return "card"; }                        // 按钮 data 的命名空间
+public class CardFeature {
 
-    public List<BotEventHandler<?>> messageHandlers() { ... }     // 入口：/card → 第 1 页 + 翻页键盘
-    public List<ButtonHandler> buttonHandlers() { ... }           // 翻页：next / prev / page
+    /** 装配成一个功能单元：id + 若干 lambda，连类都不用写（详见 `BotFeature.of`）。 */
+    @Bean
+    BotFeature card() {                       // 按钮 data 的命名空间 = id
+        return BotFeature.of("card")
+                .message(C2cMessageCreateEvent.class, event -> entry(event))     // 入口：/card → 第 1 页
+                .message(GroupAtMessageCreateEvent.class, event -> entry(event))
+                .button(CardKeyboards.ACTION_NEXT, this::step)                  // 翻页：next / prev / page
+                .button(CardKeyboards.ACTION_PREV, this::step)
+                .button(CardKeyboards.ACTION_PAGE, this::step)
+                .build();
+    }
 }
 ```
+
+功能主体逻辑长（需要字段、多个私有方法）时，也可以照旧 `implements BotFeature` 手写三个方法：
+两种写法产出同一种东西，`InteractionRouter` 一视同仁。装配期就会校验 id 与 action 的合法性（写错启动即失败）。
 
 按钮 data 由 `FeatureKeyboards` 生成，格式 `featureId:action[:k=v;k=v]`（值 URL 编码），如 `card:next:p=2`；
 点击后 `data.resolved.button_data` **原样回传**，`InteractionRouter` 解析后投递给 `card` 功能的 `next` 处理器，
@@ -254,30 +265,39 @@ public class PingHandler implements BotEventHandler<C2cMessageCreateEvent> {
 }
 ```
 
-**② 命令 + 按钮** —— 实现 `BotFeature`（`id()` 即按钮 data 的命名空间），按钮回调写 `buttonHandlers()`：
+**② 命令 + 按钮** —— 用 `BotFeature.of(id)` 函数式装配（`id` 即按钮 data 的命名空间）：
 
 ```java
 @Component
-public class VoteFeature implements BotFeature {
-    public String id() { return "vote"; }                                    // 命名空间，仅字母数字与 _ . -
-    public List<BotEventHandler<?>> messageHandlers() { return List.of(voteEntry()); }   // /vote 入口
-    public List<ButtonHandler> buttonHandlers() {                            // 按钮动作
-        return List.of(action("yes", ...), action("no", ...));
+public class VoteFeature {
+
+    @Bean
+    BotFeature vote(BotReplies replies) {
+        return BotFeature.of("vote")                                        // 命名空间，仅字母数字与 _ . -
+                .message(C2cMessageCreateEvent.class, event -> voteEntry(event, replies))   // /vote 入口
+                .button("yes", context -> {                                  // 按钮动作：与 data 的 action 段一致
+                    replies.send(context.interaction(), SendMessageRequest.markdown("已赞成 ✅"));
+                    return HandlerResult.CONSUMED;
+                })
+                .button("no", context -> { ... })
+                .build();
     }
 }
 // 发按钮：markdown 消息 + FeatureKeyboards.button("yes", "vote", "yes", "赞成", Map.of("q", "1"))
 ```
+> 单独一个处理器不想包成功能时，也可用 `BotEventHandler.of(类型, lambda)` —— 不用再写 `eventType()`。
 
 清单与注意点：
 
-1. **按钮必须用 markdown 消息承载**（`SendMessageRequest.markdown(...)`），纯文本带键盘会被平台丢弃。
-2. **回调按钮需要 `INTERACTION` 意图 + 平台开通「互动事件」权限**；没有权限时可用
+1. **id / action 在装配期校验**（只允许字母数字与 `_ . -`，见 `ButtonData`），写错是启动失败而不是首次点击才失败。
+2. **按钮必须用 markdown 消息承载**（`SendMessageRequest.markdown(...)`），纯文本带键盘会被平台丢弃。
+3. **回调按钮需要 `INTERACTION` 意图 + 平台开通「互动事件」权限**；没有权限时可用
    `FeatureKeyboards.commandButton(id, label, "/vote yes 1")` 走指令按钮（点完以普通消息回到你的命令入口）。
-3. **框架自动应答互动**（`PUT /interactions/{id}`，默认先应答再异步处理），业务不用管；处理器耗时再久也不会顶住网关读循环。
-4. **状态自描述在按钮 data 里**（`Map<String,String>` → `ButtonData` 编码），机器人侧无状态；状态过大再考虑 token + 会话表。
-5. 未命中自己的输入一律 `IGNORED`；全部忽略的事件最终落到 `@EventListener`（不影响既有监听）。
-6. 队列顺序：`kohaku.qq.handler-order`（Bean 名，优先）→ `@Order` → 注册顺序；功能自带的 `messageHandlers()` 排在所有 Bean 之后。
-7. 测试：直接调处理器（参考 `CardFeatureTest`：构造强类型事件 → 断言发出的 `SendMessageRequest`），或用 Mockito 断言 API 调用。
+4. **框架自动应答互动**（`PUT /interactions/{id}`，默认先应答再异步处理），业务不用管；处理器耗时再久也不会顶住网关读循环。
+5. **状态自描述在按钮 data 里**（`Map<String,String>` → `ButtonData` 编码），机器人侧无状态；状态过大再考虑 token + 会话表。
+6. 未命中自己的输入一律 `IGNORED`；全部忽略的事件最终落到 `@EventListener`（不影响既有监听）。
+7. 队列顺序：`kohaku.qq.handler-order`（Bean 名，优先）→ `@Order` → 注册顺序；功能自带的 `messageHandlers()` 排在所有 Bean 之后。
+8. 测试：直接调处理器（参考 `CardFeatureTest`：构造强类型事件 → 断言发出的 `SendMessageRequest`），或用 Mockito 断言 API 调用。
 
 ## 构建与验证
 

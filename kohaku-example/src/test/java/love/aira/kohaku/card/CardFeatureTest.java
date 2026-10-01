@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import love.aira.kohaku.api.model.Keyboard;
 import love.aira.kohaku.api.model.SendMessageRequest;
+import love.aira.kohaku.feature.BotFeature;
 import love.aira.kohaku.feature.ButtonContext;
 import love.aira.kohaku.feature.ButtonHandler;
 import love.aira.kohaku.gateway.event.BotEvent;
@@ -31,7 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 class CardFeatureTest {
 
     private final BotReplies replies = mock(BotReplies.class);
-    private final CardFeature feature = new CardFeature(replies);
+    private final BotFeature feature = new CardFeature(replies).card();
     private final ArgumentCaptor<BotEvent> repliedEvent = ArgumentCaptor.forClass(BotEvent.class);
     private final ArgumentCaptor<SendMessageRequest> repliedRequest = ArgumentCaptor.forClass(SendMessageRequest.class);
 

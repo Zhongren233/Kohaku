@@ -1,5 +1,7 @@
 package love.aira.kohaku.gateway.handler;
 
+import java.util.Objects;
+import java.util.function.Function;
 import love.aira.kohaku.gateway.event.BotEvent;
 
 /**
@@ -17,4 +19,30 @@ public interface BotEventHandler<E extends BotEvent> {
 
     /** 处理事件。 */
     HandlerResult handle(E event);
+
+    /**
+     * 函数式构造：不必再写 {@link #eventType()}（类型由参数给定，不做反射推断）。
+     *
+     * <pre>{@code
+     * BotEventHandler<C2cMessageCreateEvent> echo = BotEventHandler.of(C2cMessageCreateEvent.class, event -> {
+     *     replies.text(event, "echo: " + event.payload().content());
+     *     return HandlerResult.CONSUMED;
+     * });
+     * }</pre>
+     */
+    static <E extends BotEvent> BotEventHandler<E> of(Class<E> eventType, Function<E, HandlerResult> handler) {
+        Objects.requireNonNull(eventType, "eventType");
+        Objects.requireNonNull(handler, "handler");
+        return new BotEventHandler<>() {
+            @Override
+            public Class<E> eventType() {
+                return eventType;
+            }
+
+            @Override
+            public HandlerResult handle(E event) {
+                return handler.apply(event);
+            }
+        };
+    }
 }

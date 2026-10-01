@@ -87,7 +87,8 @@ public final class ButtonData {
         return new Parts(segments[0], segments[1], Map.copyOf(state));
     }
 
-    private static void requireSimple(String name, String value) {
+    /** 校验功能名/动作名是否合法（字母数字与 {@code _ . -}）；构建期调用可及早失败。 */
+    public static void requireSimple(String name, String value) {
         if (value == null || !SIMPLE.matcher(value).matches()) {
             throw new IllegalArgumentException(name + " 只能包含字母数字与 _ . -，实际为: " + value);
         }
