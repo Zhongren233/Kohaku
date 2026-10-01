@@ -6,11 +6,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
- * QQ 机器人开放平台配置。
+ * QQ 机器人开放平台配置（{@code kohaku.qq.*}）。
  *
  * @param appId                  机器人 AppID
  * @param appSecret              机器人 AppSecret，用于换取 AccessToken
- * @param apiBaseUrl             开放平台 API 基地址（沙箱环境为 https://sandbox.api.sgroup.qq.com）
+ * @param apiBaseUrl             开放平台 API 基地址（沙箱见 {@link #sandbox()}）
  * @param tokenUrl               AccessToken 获取地址
  * @param intents                事件订阅，多选 {@link QqIntent}，默认 {@code PUBLIC_GUILD_MESSAGES}
  *                               （频道内 @机器人 的消息）。基础权限仅 GUILDS、GUILD_MEMBERS、
@@ -22,6 +22,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param autoStart              随 Spring 容器启动/停止网关连接
  * @param reconnectInitialDelay  重连退避起始延迟
  * @param reconnectMaxDelay      重连退避上限
+ * @param enabled                是否启用本 starter（置 false 可整体关闭，连凭据校验也跳过）
+ * @param sandbox                是否为沙箱环境；为 true 时强制使用 {@link #SANDBOX_API_BASE_URL}
  */
 @ConfigurationProperties(prefix = "kohaku.qq")
 public record QqBotProperties(
@@ -35,15 +37,20 @@ public record QqBotProperties(
         @DefaultValue("kohaku") String clientName,
         @DefaultValue("true") boolean autoStart,
         @DefaultValue("1s") Duration reconnectInitialDelay,
-        @DefaultValue("60s") Duration reconnectMaxDelay) {
+        @DefaultValue("60s") Duration reconnectMaxDelay,
+        @DefaultValue("true") boolean enabled,
+        @DefaultValue("false") boolean sandbox) {
+
+    /** 沙箱环境的开放平台地址。 */
+    public static final String SANDBOX_API_BASE_URL = "https://sandbox.api.sgroup.qq.com";
 
     public QqBotProperties {
         if (appId == null || appId.isBlank()) {
-            throw new IllegalArgumentException("kohaku.qq.app-id is missing: 在本地 secrets/qq-bot.yaml 中填写，"
+            throw new IllegalArgumentException("kohaku.qq.app-id is missing: 在配置文件中填写，"
                     + "或设置环境变量 KOHAKU_QQ_APPID");
         }
         if (appSecret == null || appSecret.isBlank()) {
-            throw new IllegalArgumentException("kohaku.qq.app-secret is missing: 在本地 secrets/qq-bot.yaml 中填写，"
+            throw new IllegalArgumentException("kohaku.qq.app-secret is missing: 在配置文件中填写，"
                     + "或设置环境变量 KOHAKU_QQ_APPSECRET");
         }
         if (intents == null || intents.isEmpty()) {
@@ -63,5 +70,10 @@ public record QqBotProperties(
     /** 由 {@link #intents()} 合并出的位掩码，Identify 时上报给网关。 */
     public int intentsMask() {
         return QqIntent.mask(intents);
+    }
+
+    /** 实际使用的开放平台地址：{@link #sandbox()} 为 true 时走沙箱。 */
+    public String effectiveApiBaseUrl() {
+        return sandbox ? SANDBOX_API_BASE_URL : apiBaseUrl;
     }
 }

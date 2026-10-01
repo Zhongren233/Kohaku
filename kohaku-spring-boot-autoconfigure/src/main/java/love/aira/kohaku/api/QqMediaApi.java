@@ -23,7 +23,6 @@ import love.aira.kohaku.api.model.UploadPrepareRequest;
 import love.aira.kohaku.api.model.UploadPrepareResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 /**
  * 富媒体（图片/视频/语音/文件）接口。
@@ -41,7 +40,6 @@ import org.springframework.stereotype.Component;
  * files 写作 {@code user_openid}/{@code group_openid}，含义都是 OpenID，这里统一按 OpenID 处理。
  * 单聊与群聊上传的文件不互通，上传归属由 {@link Scope} 决定。
  */
-@Component
 public class QqMediaApi {
 
     private static final Logger log = LoggerFactory.getLogger(QqMediaApi.class);

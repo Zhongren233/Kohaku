@@ -8,7 +8,6 @@ import java.time.Instant;
 import love.aira.kohaku.config.QqBotProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -17,7 +16,6 @@ import tools.jackson.databind.node.ObjectNode;
  * AccessToken 的换取与缓存：有效期（通常 7200s）内复用，提前 {@value #EXPIRY_SKEW_SECONDS} 秒过期；
  * 被服务端拒绝时可 {@link #invalidate()} 后立即重取。
  */
-@Component
 public class AccessTokenProvider {
 
     private static final Logger log = LoggerFactory.getLogger(AccessTokenProvider.class);

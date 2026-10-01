@@ -6,7 +6,6 @@ import love.aira.kohaku.api.model.ChannelMessageRequest;
 import love.aira.kohaku.api.model.ChannelMessageResponse;
 import love.aira.kohaku.api.model.DmsSessionRequest;
 import love.aira.kohaku.api.model.DmsSessionResponse;
-import org.springframework.stereotype.Component;
 
 /**
  * 频道消息与频道私信接口。
@@ -22,7 +21,6 @@ import org.springframework.stereotype.Component;
  * <p>发送接口要求机器人 WebSocket 保持在线；被动回复有效期为 5 分钟；撤回仅限机器人自己发送的消息。
  * 这几组接口需私域机器人权限。
  */
-@Component
 public class QqChannelMessageApi {
 
     private final QqOpenApiClient api;

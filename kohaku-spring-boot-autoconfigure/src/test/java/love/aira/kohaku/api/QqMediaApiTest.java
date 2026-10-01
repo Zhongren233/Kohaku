@@ -37,7 +37,7 @@ class QqMediaApiTest {
         mapper = new JsonMapper();
         QqBotProperties properties = new QqBotProperties("app-id", "app-secret", server.baseUrl(),
                 server.baseUrl() + "/app/getAppAccessToken", List.of(QqIntent.PUBLIC_GUILD_MESSAGES), 0, 1,
-                "kohaku", true, Duration.ofSeconds(1), Duration.ofSeconds(60));
+                "kohaku", true, Duration.ofSeconds(1), Duration.ofSeconds(60), true, false);
         server.stub("POST /app/getAppAccessToken", 200,
                 "{\"access_token\":\"test-token\",\"expires_in\":\"7200\"}");
         HttpClient httpClient = HttpClient.newHttpClient();

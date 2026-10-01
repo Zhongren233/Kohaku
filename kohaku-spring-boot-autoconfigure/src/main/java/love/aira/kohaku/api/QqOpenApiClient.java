@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import love.aira.kohaku.config.QqBotProperties;
-import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -28,7 +27,6 @@ import tools.jackson.databind.PropertyNamingStrategies;
  *
  * <p>平台两种错误形态都会处理：非 2xx（如 401/404）与 2xx 但响应体 {@code code != 0}。
  */
-@Component
 public class QqOpenApiClient {
 
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
@@ -153,7 +151,7 @@ public class QqOpenApiClient {
     }
 
     private HttpRequest.Builder request(String path, String authorization) {
-        return HttpRequest.newBuilder(URI.create(properties.apiBaseUrl() + path))
+        return HttpRequest.newBuilder(URI.create(properties.effectiveApiBaseUrl() + path))
                 .timeout(REQUEST_TIMEOUT)
                 .header("Authorization", authorization);
     }

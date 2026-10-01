@@ -28,7 +28,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.SmartLifecycle;
-import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -53,7 +52,6 @@ import tools.jackson.databind.node.ObjectNode;
  * <p>所有网络回调由单线程执行器串行化，心跳由独立的单线程调度器驱动；事件以 Spring 事件发布，
  * 业务侧用 {@code @EventListener} 消费 {@link BotEvent}。
  */
-@Component
 public class QqGatewayClient implements SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(QqGatewayClient.class);

@@ -1,7 +1,6 @@
 package love.aira.kohaku.api;
 
 import love.aira.kohaku.config.QqBotProperties;
-import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -12,7 +11,6 @@ import tools.jackson.databind.JsonNode;
  *   <li>{@code GET /gateway/bot}：带分片接入点，额外返回建议分片数与 Session 创建限制</li>
  * </ul>
  */
-@Component
 public class QqGatewayApi {
 
     private final QqOpenApiClient api;

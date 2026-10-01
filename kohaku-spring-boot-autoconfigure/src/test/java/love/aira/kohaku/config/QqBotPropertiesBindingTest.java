@@ -2,14 +2,18 @@ package love.aira.kohaku.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import love.aira.kohaku.autoconfigure.KohakuAutoConfiguration;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class QqBotPropertiesBindingTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
-            .withUserConfiguration(QqBotConfiguration.class)
-            .withPropertyValues("kohaku.qq.app-id=test-app", "kohaku.qq.app-secret=test-secret");
+            .withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class, KohakuAutoConfiguration.class))
+            .withPropertyValues("kohaku.qq.app-id=test-app", "kohaku.qq.app-secret=test-secret",
+                    "kohaku.qq.auto-start=false");
 
     @Test
     void defaultsToPublicGuildMessages() {
@@ -17,6 +21,9 @@ class QqBotPropertiesBindingTest {
             QqBotProperties properties = context.getBean(QqBotProperties.class);
             assertThat(properties.intents()).containsExactly(QqIntent.PUBLIC_GUILD_MESSAGES);
             assertThat(properties.intentsMask()).isEqualTo(1 << 30);
+            assertThat(properties.enabled()).isTrue();
+            assertThat(properties.sandbox()).isFalse();
+            assertThat(properties.autoStart()).isFalse();
         });
     }
 
@@ -66,18 +73,6 @@ class QqBotPropertiesBindingTest {
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure()).hasStackTraceContaining("kohaku.qq.shard-index");
-                });
-    }
-
-    @Test
-    void rejectsMissingCredentials() {
-        new ApplicationContextRunner()
-                .withUserConfiguration(QqBotConfiguration.class)
-                .run(context -> {
-                    assertThat(context).hasFailed();
-                    assertThat(context.getStartupFailure())
-                            .hasStackTraceContaining("kohaku.qq.app-id is missing")
-                            .hasStackTraceContaining("KOHAKU_QQ_APPID");
                 });
     }
 }

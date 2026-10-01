@@ -4,7 +4,6 @@ import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.api.model.SendMessageResponse;
 import love.aira.kohaku.api.model.StreamMessageRequest;
 import love.aira.kohaku.api.model.StreamMessageResponse;
-import org.springframework.stereotype.Component;
 
 /**
  * QQ 单聊与群聊消息接口。
@@ -19,7 +18,6 @@ import org.springframework.stereotype.Component;
  *
  * <p>开放平台把 OpenID 作为不透明路径参数，这里统一做路径段转义，避免消息 ID 中的特殊字符破坏路径。
  */
-@Component
 public class QqMessageApi {
 
     private final QqOpenApiClient api;
