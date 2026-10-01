@@ -1,0 +1,77 @@
+# 发布到 Maven Central（Sonatype Central Portal）。
+# 与 maven-publish.yml 并行触发：同一个 Release 既进 GitHub Packages，也进 Central。
+# 版本号同样取自 Release 的 tag（去掉可选的 v 前缀）。
+#
+# 依赖的仓库 secrets：
+#   CENTRAL_USERNAME / CENTRAL_TOKEN  —— Central Portal 的 User Token
+#   GPG_PRIVATE_KEY / GPG_PASSPHRASE  —— 签名密钥（指纹见根 pom 的 central profile）
+
+name: Maven Central
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 手动发布时使用的版本号（不含 v 前缀），例如 0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maven-central-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+          server-id: central # 与根 pom central profile 的 publishingServerId 一致
+          server-username: CENTRAL_USERNAME
+          server-password: CENTRAL_TOKEN
+          settings-path: ${{ github.workspace }}
+
+      - name: Resolve version from tag
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            raw="$TAG_NAME"
+          else
+            raw="$INPUT_VERSION"
+          fi
+          echo "version=${raw#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set project version
+        run: ./mvnw -B -ntp versions:set -DnewVersion="${{ steps.version.outputs.version }}" -DgenerateBackupPoms=false
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --list-secret-keys --keyid-format LONG
+
+      - name: Publish to Maven Central
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_TOKEN: ${{ secrets.CENTRAL_TOKEN }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        # 示例应用不发布（它在 maven-publish.yml 里由 maven.deploy.skip 排除，
+        # 而 Central 插件不认该属性，因此在 reactor 里直接排除该模块）
+        run: ./mvnw -B -ntp -Pcentral deploy -pl '!:kohaku-example' -s "$GITHUB_WORKSPACE/settings.xml"
