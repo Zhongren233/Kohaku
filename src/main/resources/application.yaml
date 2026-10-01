@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: kohaku
+  config:
+    # 私有凭据不落库：默认放本地 secrets/qq-bot.yaml（已 gitignore），
+    # 部署时用环境变量 KOHAKU_QQ_APPID / KOHAKU_QQ_APPSECRET 覆盖。
+    import: optional:file:./secrets/qq-bot.yaml
+
+kohaku:
+  qq:
+    # app-id / app-secret 见上述导入文件（勿写入本文件）
+    intents: # 多选枚举，默认 [PUBLIC_GUILD_MESSAGES]（频道内 @机器人 消息）
+      - PUBLIC_GUILD_MESSAGES    # 基础权限
+      - GROUP_AND_C2C_EVENT      # 群/单聊事件，需在开放平台申请
+    # 以下均为默认值，按需覆盖即可
+    # api-base-url: https://api.sgroup.qq.com   # 沙箱：https://sandbox.api.sgroup.qq.com
+    # token-url: https://bots.qq.com/app/getAppAccessToken
+    # shard-index: 0
+    # shard-total: 1
+    # client-name: kohaku
+    # auto-start: true
+    # reconnect-initial-delay: 1s
+    # reconnect-max-delay: 60s
