@@ -1,10 +1,19 @@
 package love.aira.kohaku.api;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 import love.aira.kohaku.config.QqBotProperties;
 import org.springframework.stereotype.Component;
@@ -65,6 +74,82 @@ public class QqOpenApiClient {
 
     public JsonNode delete(String path) {
         return execute(authorization -> request(path, authorization).DELETE().build());
+    }
+
+    /**
+     * multipart/form-data 提交：频道与私信发送接口支持直接用 form-data 上传图片文件（{@code file_image}）。
+     *
+     * <p>对象/数组字段按文档要求序列化为 JSON 字符串；字段集合用 {@link #formFields(Object)} 从请求对象生成。
+     */
+    public <T> T postMultipart(String path, Map<String, Object> fields, String fileField, Path file, Class<T> type) {
+        MultipartBody multipart = multipartBody(fields, fileField, file);
+        JsonNode payload = execute(authorization -> request(path, authorization)
+                .header("Content-Type", multipart.contentType())
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipart.body()))
+                .build());
+        return convert(payload, type);
+    }
+
+    /** 把请求对象按 snake_case 转成表单字段（null 字段被忽略，对象/数组保留为 JSON 值）。 */
+    public Map<String, Object> formFields(Object body) {
+        JsonNode node = mapper.valueToTree(body);
+        Map<String, Object> fields = new LinkedHashMap<>();
+        if (node != null && node.isObject()) {
+            node.properties().forEach(entry -> fields.put(entry.getKey(), entry.getValue()));
+        }
+        return fields;
+    }
+
+    private record MultipartBody(byte[] body, String contentType) {
+    }
+
+    private MultipartBody multipartBody(Map<String, Object> fields, String fileField, Path file) {
+        String boundary = "----kohaku-" + UUID.randomUUID().toString().replace("-", "");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        fields.forEach((name, value) -> writeTextField(out, boundary, name, value));
+        writeFilePart(out, boundary, fileField, file);
+        write(out, "--" + boundary + "--\r\n");
+        return new MultipartBody(out.toByteArray(), "multipart/form-data; boundary=" + boundary);
+    }
+
+    private void writeTextField(ByteArrayOutputStream out, String boundary, String name, Object value) {
+        write(out, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + name + "\"\r\n\r\n");
+        write(out, value instanceof String text ? text
+                : value instanceof JsonNode node && node.isString() ? node.stringValue()
+                : mapper.writeValueAsString(value));
+        write(out, "\r\n");
+    }
+
+    private void writeFilePart(ByteArrayOutputStream out, String boundary, String fileField, Path file) {
+        write(out, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + fileField + "\"; filename=\""
+                + file.getFileName() + "\"\r\nContent-Type: " + mediaType(file) + "\r\n\r\n");
+        try {
+            out.write(Files.readAllBytes(file));
+        } catch (IOException e) {
+            throw new QqApiException("cannot read file " + file + ": " + e.getMessage(), e);
+        }
+        write(out, "\r\n");
+    }
+
+    private static String mediaType(Path file) {
+        String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (name.endsWith(".png")) {
+            return "image/png";
+        }
+        if (name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (name.endsWith(".gif")) {
+            return "image/gif";
+        }
+        if (name.endsWith(".webp")) {
+            return "image/webp";
+        }
+        return "application/octet-stream";
+    }
+
+    private static void write(ByteArrayOutputStream out, String text) {
+        out.writeBytes(text.getBytes(StandardCharsets.UTF_8));
     }
 
     private HttpRequest.Builder request(String path, String authorization) {

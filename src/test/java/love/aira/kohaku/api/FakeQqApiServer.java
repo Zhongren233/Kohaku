@@ -20,7 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 final class FakeQqApiServer implements AutoCloseable {
 
-    record Call(String method, String path, String authorization, String body) {
+    record Call(String method, String path, String query, String authorization, String contentType, String body) {
     }
 
     private final HttpServer server;
@@ -67,8 +67,9 @@ final class FakeQqApiServer implements AutoCloseable {
     private void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getRawPath();
         String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        calls.add(new Call(exchange.getRequestMethod(), path,
-                exchange.getRequestHeaders().getFirst("Authorization"), body));
+        calls.add(new Call(exchange.getRequestMethod(), path, exchange.getRequestURI().getRawQuery(),
+                exchange.getRequestHeaders().getFirst("Authorization"),
+                exchange.getRequestHeaders().getFirst("Content-Type"), body));
 
         Deque<String[]> queue = stubs.get(exchange.getRequestMethod() + " " + path);
         if (queue == null || queue.isEmpty()) {
