@@ -1,6 +1,5 @@
 package love.aira.kohaku.api;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Map;
 import love.aira.kohaku.api.model.ChannelMessageRequest;
@@ -8,7 +7,6 @@ import love.aira.kohaku.api.model.ChannelMessageResponse;
 import love.aira.kohaku.api.model.DmsSessionRequest;
 import love.aira.kohaku.api.model.DmsSessionResponse;
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.UriUtils;
 
 /**
  * 频道消息与频道私信接口。
@@ -35,14 +33,14 @@ public class QqChannelMessageApi {
 
     /** 发送子频道消息。 */
     public ChannelMessageResponse sendToChannel(String channelId, ChannelMessageRequest request) {
-        return api.post("/channels/" + segment("channel_id", channelId) + "/messages", request,
+        return api.post("/channels/" + PathSegments.encode("channel_id", channelId) + "/messages", request,
                 ChannelMessageResponse.class);
     }
 
     /** 以 form-data 方式发送子频道消息并直接上传图片文件（对应文档的 file_image 参数）。 */
     public ChannelMessageResponse sendImageToChannel(String channelId, ChannelMessageRequest request, Path image) {
         Map<String, Object> fields = api.formFields(request);
-        return api.postMultipart("/channels/" + segment("channel_id", channelId) + "/messages", fields,
+        return api.postMultipart("/channels/" + PathSegments.encode("channel_id", channelId) + "/messages", fields,
                 "file_image", image, ChannelMessageResponse.class);
     }
 
@@ -53,7 +51,7 @@ public class QqChannelMessageApi {
 
     /** 撤回子频道消息，{@code hideTip} 控制是否隐藏「消息已撤回」提示小灰条。 */
     public void recallFromChannel(String channelId, String messageId, boolean hideTip) {
-        api.delete("/channels/" + segment("channel_id", channelId) + "/messages/" + segment("message_id", messageId)
+        api.delete("/channels/" + PathSegments.encode("channel_id", channelId) + "/messages/" + PathSegments.encode("message_id", messageId)
                 + "?hidetip=" + hideTip);
     }
 
@@ -65,14 +63,14 @@ public class QqChannelMessageApi {
 
     /** 发送私信（路径参数是私信会话的 guild_id）。 */
     public ChannelMessageResponse sendToDms(String dmsGuildId, ChannelMessageRequest request) {
-        return api.post("/dms/" + segment("guild_id", dmsGuildId) + "/messages", request,
+        return api.post("/dms/" + PathSegments.encode("guild_id", dmsGuildId) + "/messages", request,
                 ChannelMessageResponse.class);
     }
 
     /** 以 form-data 方式发送私信并直接上传图片文件。 */
     public ChannelMessageResponse sendImageToDms(String dmsGuildId, ChannelMessageRequest request, Path image) {
         Map<String, Object> fields = api.formFields(request);
-        return api.postMultipart("/dms/" + segment("guild_id", dmsGuildId) + "/messages", fields,
+        return api.postMultipart("/dms/" + PathSegments.encode("guild_id", dmsGuildId) + "/messages", fields,
                 "file_image", image, ChannelMessageResponse.class);
     }
 
@@ -83,14 +81,8 @@ public class QqChannelMessageApi {
 
     /** 撤回私信，{@code hideTip} 控制是否隐藏提示小灰条。 */
     public void recallFromDms(String dmsGuildId, String messageId, boolean hideTip) {
-        api.delete("/dms/" + segment("guild_id", dmsGuildId) + "/messages/" + segment("message_id", messageId)
+        api.delete("/dms/" + PathSegments.encode("guild_id", dmsGuildId) + "/messages/" + PathSegments.encode("message_id", messageId)
                 + "?hidetip=" + hideTip);
     }
 
-    private static String segment(String name, String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
-        return UriUtils.encodePathSegment(value, StandardCharsets.UTF_8);
-    }
 }

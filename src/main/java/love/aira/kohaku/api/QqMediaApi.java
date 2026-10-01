@@ -24,8 +24,6 @@ import love.aira.kohaku.api.model.UploadPrepareResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.UriUtils;
-import java.nio.charset.StandardCharsets;
 
 /**
  * 富媒体（图片/视频/语音/文件）接口。
@@ -151,15 +149,9 @@ public class QqMediaApi {
     }
 
     private static String scopePath(Scope scope, String openid) {
-        return "/v2/" + scope.path() + "/" + segment("openid", openid);
+        return "/v2/" + scope.path() + "/" + PathSegments.encode("openid", openid);
     }
 
-    private static String segment(String name, String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
-        return UriUtils.encodePathSegment(value, StandardCharsets.UTF_8);
-    }
 
     private static long size(Path file) {
         try {
