@@ -6,6 +6,10 @@ import java.util.List;
 /**
  * 内嵌键盘：短形式只传平台模板 {@link #template(String)}，长形式传自定义布局 {@link #of(Row...)}。
  *
+ * <p><b>实测约束</b>：客户端只在 <b>markdown 消息（{@code msg_type=2}）</b> 上渲染自定义键盘；
+ * 纯文本消息（{@code msg_type=0}）带键盘会被平台静默丢弃（文档未写明），因此发送带键盘的消息请用
+ * {@code SendMessageRequest.markdown(...)}。{@code QqMessageApi} 会在检测到该误用时打 WARN。
+ *
  * <p>子结构按文档 {@code keyboard.content.rows[].buttons[]} 建模。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)

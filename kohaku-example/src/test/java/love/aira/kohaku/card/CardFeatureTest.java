@@ -36,7 +36,12 @@ class CardFeatureTest {
     void rendersFirstPageWithNextButtonOnly() {
         SendMessageRequest request = CardFeature.page(1);
 
-        assertThat(request.content())
+        // 实测：键盘只在 markdown 消息（msg_type=2）上渲染，纯文本会被平台丢弃
+        assertThat(request.msgType()).isEqualTo(2);
+        assertThat(request.content()).isNull();
+        assertThat(request.keyboard()).isNotNull();
+
+        assertThat(request.markdown().content())
                 .contains("卡片列表 1/3")
                 .contains("C-001").contains("C-005")
                 .doesNotContain("C-006");
@@ -47,11 +52,11 @@ class CardFeatureTest {
     @Test
     void rendersLastPageWithoutNextButtonAndClampsOverflow() {
         SendMessageRequest last = CardFeature.page(3);
-        assertThat(last.content()).contains("卡片列表 3/3").contains("C-011").contains("C-012");
+        assertThat(last.markdown().content()).contains("卡片列表 3/3").contains("C-011").contains("C-012");
         assertThat(buttonIds(last)).containsExactly("prev", "page");
         assertThat(buttonData(last, 0)).isEqualTo("card:prev:p=2");
 
-        assertThat(CardFeature.page(99).content()).contains("卡片列表 3/3");   // 越界页码被夹回
+        assertThat(CardFeature.page(99).markdown().content()).contains("卡片列表 3/3");   // 越界页码被夹回
     }
 
     @Test
@@ -62,7 +67,7 @@ class CardFeatureTest {
         assertThat(entry.handle(event)).isEqualTo(HandlerResult.CONSUMED);
 
         SendMessageRequest sent = captureSentToUser();
-        assertThat(sent.content()).contains("卡片列表 1/3");
+        assertThat(sent.markdown().content()).contains("卡片列表 1/3");
         assertThat(sent.msgId()).isEqualTo("MSG_1");           // 被动回复
         assertThat(sent.msgSeq()).isEqualTo(1);
     }
@@ -83,7 +88,7 @@ class CardFeatureTest {
                 .isEqualTo(HandlerResult.CONSUMED);
 
         SendMessageRequest sent = captureSentToUser();
-        assertThat(sent.content()).contains("卡片列表 2/3").contains("C-006").contains("C-010");
+        assertThat(sent.markdown().content()).contains("卡片列表 2/3").contains("C-006").contains("C-010");
         assertThat(sent.eventId()).isEqualTo("EVENT_ID");      // 用互动事件 id 被动回复
         assertThat(sent.msgSeq()).isNull();
         assertThat(buttonIds(sent)).containsExactly("prev", "page", "next");   // 第二页前后都有
@@ -94,7 +99,7 @@ class CardFeatureTest {
         assertThat(button("page").onButton(context("card:page:p=2", Map.of("p", "2"))))
                 .isEqualTo(HandlerResult.CONSUMED);
 
-        assertThat(captureSentToUser().content()).contains("卡片列表 2/3");
+        assertThat(captureSentToUser().markdown().content()).contains("卡片列表 2/3");
     }
 
     @Test

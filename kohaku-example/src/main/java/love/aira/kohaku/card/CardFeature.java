@@ -63,16 +63,21 @@ public class CardFeature implements BotFeature {
         return ID;
     }
 
-    /** 渲染指定页（纯函数，便于测试）：文本 + 翻页键盘。 */
+    /**
+     * 渲染指定页（纯函数，便于测试）：文本 + 翻页键盘。
+     *
+     * <p>必须用 markdown（{@code msg_type=2}）承载键盘：实测纯文本消息上的自定义键盘会被客户端丢弃
+     * （文档未说明，见 README「键盘只在 markdown 消息上渲染」）。
+     */
     public static SendMessageRequest page(int requestedPage) {
         Pagination pagination = Pagination.of(requestedPage, PAGE_SIZE, CARDS.size());
-        StringBuilder content = new StringBuilder("卡片列表 ").append(pagination.label()).append('\n');
+        StringBuilder markdown = new StringBuilder("# 卡片列表 ").append(pagination.label()).append("\n\n");
         for (Card card : pagination.slice(CARDS)) {
-            content.append("· ").append(card.id()).append(' ').append(card.title())
+            markdown.append("- **").append(card.id()).append("** ").append(card.title())
                     .append(" —— ").append(card.summary()).append('\n');
         }
-        content.append("（点击下方按钮翻页）");
-        return SendMessageRequest.text(content.toString())
+        markdown.append("\n> 点击下方按钮翻页");
+        return SendMessageRequest.markdown(markdown.toString())
                 .withKeyboard(FeatureKeyboards.pagination(ID, pagination, Map.of()));
     }
 

@@ -173,6 +173,9 @@ kohaku:
 纯 Java（无 Spring）：`new EventDispatcher(List.of(handler1, handler2), unconsumed -> …)`，执行顺序即列表顺序。
 `kohaku-example` 内含两个可运行示例处理器（`EchoC2cHandler`、`EchoGroupHandler`）。
 
+> ⚠️ **同一 bot 只跑一个实例**：平台会把事件推给每一个在线连接，多实例并存会导致同一条消息被处理多次
+> （实测：出现两条重复回复）。本地同时开了 IDE 实例与命令行实例时尤其注意。
+
 ## 功能模块与按钮回调（方案 A：自描述 data）
 
 一个**功能**承担「消息入口 + 自己的按钮」，按钮点击按 data 里的命名空间投递回该功能 —— 例如 `/card` 列表翻页：
@@ -194,6 +197,8 @@ public class CardFeature implements BotFeature {
 - **状态放在 data 里（方案 A）**：机器人侧无状态、跨重启可用；状态过大时应改用「token + 服务端会话表」。
 - 助手：`FeatureKeyboards.pagination(featureId, pagination, state)` 生成 上一页/页码/下一页；
   `Pagination.of(page, size, total)` 负责页码夹取与切片。
+- **键盘只在 markdown 消息上渲染（实测，文档未写）**：`msg_type=0`（纯文本）带 `keyboard` 会被平台静默丢弃，
+  所以发送带按钮的消息必须用 `SendMessageRequest.markdown(...)`；`QqMessageApi` 检测到该误用会打 WARN。
 - 未命中（未知功能 / 未知动作 / data 非法 / 非按钮互动）→ `IGNORED`，继续走处理链并最终落到 `@EventListener`；
 - 回复用 `InteractionReplies.reply(messages, ctx, request)`：自动按场景选单聊/群聊并用互动事件 id 做被动回复。
 - 平台约束：单聊/群聊**没有编辑消息接口** → 每次翻页是发一条新消息（旧键盘随旧消息失效）；

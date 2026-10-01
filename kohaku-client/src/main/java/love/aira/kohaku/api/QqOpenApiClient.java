@@ -17,6 +17,8 @@ import java.util.UUID;
 import java.util.function.Function;
 import love.aira.kohaku.config.KohakuConfig;
 import love.aira.kohaku.support.SnakeCaseMappers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -29,6 +31,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 public class QqOpenApiClient {
 
+    private static final Logger log = LoggerFactory.getLogger(QqOpenApiClient.class);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
 
     private final HttpClient httpClient;
@@ -50,9 +53,13 @@ public class QqOpenApiClient {
     }
 
     public JsonNode post(String path, Object body) {
+        String json = body == null ? "{}" : mapper.writeValueAsString(body);
+        if (log.isDebugEnabled()) {
+            log.debug("QQ api -> POST {} {}", path, json);
+        }
         return execute(authorization -> request(path, authorization)
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body == null ? "{}" : mapper.writeValueAsString(body)))
+                .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build());
     }
 
@@ -159,6 +166,9 @@ public class QqOpenApiClient {
         if (isUnauthorized(response.statusCode())) {
             tokens.invalidate();
             response = HttpCalls.send(httpClient, requestFactory.apply(tokens.authorization()));
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("QQ api <- {} {} {}", response.request().method(), response.uri().getPath(), response.body());
         }
         return ApiResponses.requireSuccess(response);
     }
