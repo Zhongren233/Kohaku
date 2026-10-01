@@ -226,6 +226,51 @@ public class CardFeature implements BotFeature {
 
 `kohaku-example` 内含完整可跑的 `/card`（12 条卡片、每页 5 条、支持上一页/下一页/页码）。
 
+## 新增一个功能 / 指令（清单）
+
+**① 只要命令、不要按钮** —— 直接实现 `BotEventHandler` 并注册为 Bean（无需 `BotFeature`）：
+
+```java
+@Component
+@Order(50)                                   // 与其它处理器的先后；也可用 kohaku.qq.handler-order 按 Bean 名声明
+public class PingHandler implements BotEventHandler<C2cMessageCreateEvent> {
+    public Class<C2cMessageCreateEvent> eventType() { return C2cMessageCreateEvent.class; }
+    public HandlerResult handle(C2cMessageCreateEvent event) {
+        if (!"/ping".equals(event.payload().content())) {
+            return HandlerResult.IGNORED;     // 不是自己的命令一定要忽略，交给后面的处理器
+        }
+        messages.sendToUser(event.payload().author().userOpenid(),
+                SendMessageRequest.text("pong").replyingTo(event.payload().id(), 1));   // 被动回复
+        return HandlerResult.CONSUMED;
+    }
+}
+```
+
+**② 命令 + 按钮** —— 实现 `BotFeature`（`id()` 即按钮 data 的命名空间），按钮回调写 `buttonHandlers()`：
+
+```java
+@Component
+public class VoteFeature implements BotFeature {
+    public String id() { return "vote"; }                                    // 命名空间，仅字母数字与 _ . -
+    public List<BotEventHandler<?>> messageHandlers() { return List.of(voteEntry()); }   // /vote 入口
+    public List<ButtonHandler> buttonHandlers() {                            // 按钮动作
+        return List.of(action("yes", ...), action("no", ...));
+    }
+}
+// 发按钮：markdown 消息 + FeatureKeyboards.button("yes", "vote", "yes", "赞成", Map.of("q", "1"))
+```
+
+清单与注意点：
+
+1. **按钮必须用 markdown 消息承载**（`SendMessageRequest.markdown(...)`），纯文本带键盘会被平台丢弃。
+2. **回调按钮需要 `INTERACTION` 意图 + 平台开通「互动事件」权限**；没有权限时可用
+   `FeatureKeyboards.commandButton(id, label, "/vote yes 1")` 走指令按钮（点完以普通消息回到你的命令入口）。
+3. **框架自动应答互动**（`PUT /interactions/{id}`，默认先应答再异步处理），业务不用管；处理器耗时再久也不会顶住网关读循环。
+4. **状态自描述在按钮 data 里**（`Map<String,String>` → `ButtonData` 编码），机器人侧无状态；状态过大再考虑 token + 会话表。
+5. 未命中自己的输入一律 `IGNORED`；全部忽略的事件最终落到 `@EventListener`（不影响既有监听）。
+6. 队列顺序：`kohaku.qq.handler-order`（Bean 名，优先）→ `@Order` → 注册顺序；功能自带的 `messageHandlers()` 排在所有 Bean 之后。
+7. 测试：直接调处理器（参考 `CardFeatureTest`：构造强类型事件 → 断言发出的 `SendMessageRequest`），或用 Mockito 断言 API 调用。
+
 ## 构建与验证
 
 ```bash

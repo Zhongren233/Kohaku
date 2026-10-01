@@ -15,11 +15,22 @@ public interface BotFeature {
     /** 功能标识，同时是按钮 data 的命名空间；只允许字母数字与 {@code _.-}。 */
     String id();
 
-    /** 本功能的消息入口处理器（可与其它 Bean 一起进入同一条有序处理链）。 */
+    /**
+     * 本功能的消息入口处理器（可与其它 Bean 一起进入同一条有序处理链）。
+     *
+     * <p>只做命令、没有按钮的功能不需要实现本方法。
+     */
     default List<BotEventHandler<?>> messageHandlers() {
         return List.of();
     }
 
-    /** 本功能的按钮回调，按 action 匹配。 */
-    List<ButtonHandler> buttonHandlers();
+    /**
+     * 本功能的按钮回调，按 action 匹配；**没有按钮的功能返回空列表即可**（默认值）。
+     *
+     * <p>本功能的 {@link #id()} 会作为按钮 data 的命名空间（见 {@link ButtonData}），
+     * 点击后由 {@link InteractionRouter} 投递到这里注册的 {@link ButtonHandler}。
+     */
+    default List<ButtonHandler> buttonHandlers() {
+        return List.of();
+    }
 }
