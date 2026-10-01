@@ -30,9 +30,16 @@
         <java.version>25</java.version>
     </properties>
     <dependencies>
+        <!-- 机器人不提供 HTTP 服务：网关长连接用 JDK java.net.http.WebSocket，
+             这里只需要 Jackson(tools.jackson 绑定) 与 spring-web 的 UriUtils(路径段转义)。
+             Spring 的服务端 WebSocket 仅测试期用到(假网关)，见下方 test 依赖。 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-websocket</artifactId>
+            <artifactId>spring-boot-starter-jackson</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
         </dependency>
 
         <dependency>
@@ -42,7 +49,13 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-websocket-test</artifactId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- 测试用假网关：Spring WebSocket 服务端 + 内嵌 Tomcat -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

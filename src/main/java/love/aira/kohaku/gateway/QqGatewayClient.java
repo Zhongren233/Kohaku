@@ -104,8 +104,8 @@ public class QqGatewayClient implements SmartLifecycle {
                 return;
             }
             running = true;
-            callbackExecutor = Executors.newSingleThreadExecutor(runnable -> daemonThread(runnable, "qq-gateway-io"));
-            scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> daemonThread(runnable, "qq-gateway-scheduler"));
+            callbackExecutor = Executors.newSingleThreadExecutor(r -> clientThread(r, "qq-gateway-io"));
+            scheduler = Executors.newSingleThreadScheduledExecutor(r -> clientThread(r, "qq-gateway-scheduler"));
             httpClient = HttpClient.newBuilder()
                     .executor(callbackExecutor)
                     .connectTimeout(CONNECT_TIMEOUT)
@@ -520,9 +520,13 @@ public class QqGatewayClient implements SmartLifecycle {
         }
     }
 
-    private static Thread daemonThread(Runnable runnable, String name) {
+    /**
+     * 非守护线程：应用不再内嵌 Web 容器，由网关连接与心跳线程维持进程存活；
+     * {@link #stop()} 关闭执行器后进程即可正常退出。
+     */
+    private static Thread clientThread(Runnable runnable, String name) {
         Thread thread = new Thread(runnable, name);
-        thread.setDaemon(true);
+        thread.setDaemon(false);
         return thread;
     }
 
