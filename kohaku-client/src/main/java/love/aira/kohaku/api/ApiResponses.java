@@ -21,9 +21,10 @@ final class ApiResponses {
         String body = response.body();
         JsonNode payload = body == null || body.isBlank() ? NullNode.getInstance() : parse(body);
         if (response.statusCode() / 100 != 2) {
-            throw new QqApiException(response.statusCode(), payload.path("code").asInt(0),
-                    "HTTP " + response.statusCode() + " from " + response.uri().getPath() + ": "
-                            + describe(payload, body), body);
+            int code = payload.path("code").asInt(0);
+            throw new QqApiException(response.statusCode(), code,
+                    "HTTP " + response.statusCode() + (code == 0 ? "" : " (code " + code + ")") + " from "
+                            + response.uri().getPath() + ": " + describe(payload, body), body);
         }
         int code = payload.path("code").asInt(0);
         if (code != 0) {

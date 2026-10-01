@@ -44,6 +44,14 @@ public record ButtonContext(
         return interaction.eventId();
     }
 
+    /**
+     * 应答互动用的 {@code interaction_id} —— 取事件体 {@code d.id}（**不带** {@code INTERACTION_CREATE:} 前缀）。
+     * 两个 id 用途不同：回复消息用 {@link #eventId()}，调 {@code PUT /interactions/{id}} 用本方法。
+     */
+    public String interactionId() {
+        return interaction.payload() == null ? null : interaction.payload().id();
+    }
+
     public boolean isGuild() {
         return chatType != null && chatType == 0;
     }

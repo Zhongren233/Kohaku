@@ -90,7 +90,7 @@ class CardFeatureTest {
 
     @Test
     void nextButtonRendersFollowingPageAndRepliesToTheInteraction() {
-        assertThat(button("next").onButton(context("card:next:p=1", Map.of("p", "1"))))
+        assertThat(button("next").onButton(context("card:next:p=2", Map.of("p", "2"))))
                 .isEqualTo(HandlerResult.CONSUMED);
 
         SendMessageRequest sent = captureSentToUser();

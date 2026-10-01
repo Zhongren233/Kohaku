@@ -103,6 +103,33 @@ class InteractionRouterTest {
     }
 
     @Test
+    void acksInteractionOnSuccessAndFailureOnly() {
+        List<String> acks = new CopyOnWriteArrayList<>();
+        InteractionRouter acking = new InteractionRouter(List.of(card), (id, code) -> acks.add(id + ":" + code));
+
+        // 处理成功 → 应答 code=0，且用事件体 d.id（不带 INTERACTION_CREATE: 前缀）
+        assertThat(acking.handle(click("card:next:p=2", 11, 2, "USER", null))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(acks).containsExactly("EVENT_ID:0");
+
+        // 返回 IGNORED → 交给链上后续处理器，这里不应答
+        card.result = HandlerResult.IGNORED;
+        assertThat(acking.handle(click("card:next:p=2", 11, 2, "USER", null))).isEqualTo(HandlerResult.IGNORED);
+        assertThat(acks).containsExactly("EVENT_ID:0");
+
+        // 处理器抛异常 → 应答 code=1，异常继续抛给派发链
+        card.failure = new IllegalStateException("boom");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> acking.handle(click("card:next:p=2", 11, 2, "USER", null)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(acks).containsExactly("EVENT_ID:0", "EVENT_ID:1");
+
+        // 未注册动作 → 不应答
+        card.failure = null;
+        assertThat(acking.handle(click("card:missing:p=2", 11, 2, "USER", null))).isEqualTo(HandlerResult.IGNORED);
+        assertThat(acks).hasSize(2);
+    }
+
+    @Test
     void playsWellWithDispatcherChain() {
         List<BotEvent> fallback = new ArrayList<>();
         EventDispatcher dispatcher = new EventDispatcher(List.of(router), fallback::add);
@@ -143,6 +170,7 @@ class InteractionRouterTest {
 
         final List<ButtonContext> handled = new CopyOnWriteArrayList<>();
         HandlerResult result = HandlerResult.CONSUMED;
+        RuntimeException failure;
 
         @Override
         public String id() {
@@ -160,6 +188,9 @@ class InteractionRouterTest {
                 @Override
                 public HandlerResult onButton(ButtonContext context) {
                     handled.add(context);
+                    if (failure != null) {
+                        throw failure;
+                    }
                     return result;
                 }
             });

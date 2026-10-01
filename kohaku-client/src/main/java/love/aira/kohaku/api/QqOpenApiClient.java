@@ -79,6 +79,22 @@ public class QqOpenApiClient {
         return execute(authorization -> request(path, authorization).DELETE().build());
     }
 
+    public <T> T put(String path, Object body, Class<T> type) {
+        return convert(put(path, body), type);
+    }
+
+    /** PUT 提交 JSON（如应答互动事件）。 */
+    public JsonNode put(String path, Object body) {
+        String json = body == null ? "{}" : mapper.writeValueAsString(body);
+        if (log.isDebugEnabled()) {
+            log.debug("QQ api -> PUT {} {}", path, json);
+        }
+        return execute(authorization -> request(path, authorization)
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(json))
+                .build());
+    }
+
     /**
      * multipart/form-data 提交：频道与私信发送接口支持直接用 form-data 上传图片文件（{@code file_image}）。
      *

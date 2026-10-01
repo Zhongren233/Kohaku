@@ -120,12 +120,15 @@ public class CardFeature implements BotFeature {
 
     @Override
     public List<ButtonHandler> buttonHandlers() {
-        return List.of(step(FeatureKeyboards.ACTION_NEXT, 1), step(FeatureKeyboards.ACTION_PREV, -1),
-                step(FeatureKeyboards.ACTION_PAGE, 0));
+        return List.of(step(FeatureKeyboards.ACTION_NEXT), step(FeatureKeyboards.ACTION_PREV),
+                step(FeatureKeyboards.ACTION_PAGE));
     }
 
-    /** 翻页按钮：读取按钮 data 里的页码并渲染目标页，用互动事件 id 做被动回复。 */
-    private ButtonHandler step(String action, int delta) {
+    /**
+     * 翻页按钮：按钮 data 里携带的是**目标页码**（`FeatureKeyboards.pagination` 已算好，
+     * 指令按钮 `/card next 2` 同理），这里直接渲染目标页，不再做加减 —— 这样重复点击/重放也是幂等的。
+     */
+    private ButtonHandler step(String action) {
         return new ButtonHandler() {
             @Override
             public String action() {
@@ -134,10 +137,8 @@ public class CardFeature implements BotFeature {
 
             @Override
             public HandlerResult onButton(ButtonContext context) {
-                int current = Pagination.of(context.intState(FeatureKeyboards.STATE_PAGE, 1), PAGE_SIZE, CARDS.size())
-                        .page();
-                int target = delta == 0 ? current : current + delta;
-                log.info("card 翻页 {} → {} (scene={} user={})", current, target, context.scene(),
+                int target = context.intState(FeatureKeyboards.STATE_PAGE, 1);
+                log.info("card 翻页 action={} target={} scene={} chat={}", action, target, context.scene(),
                         context.userOpenid() != null ? context.userOpenid() : context.groupOpenid());
                 InteractionReplies.reply(messages, context, page(target));
                 return HandlerResult.CONSUMED;

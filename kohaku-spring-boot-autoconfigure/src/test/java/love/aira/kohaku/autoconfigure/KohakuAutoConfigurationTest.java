@@ -8,6 +8,7 @@ import love.aira.kohaku.api.AccessTokenProvider;
 import love.aira.kohaku.api.QqChannelMessageApi;
 import love.aira.kohaku.api.QqGatewayApi;
 import love.aira.kohaku.api.QqMediaApi;
+import love.aira.kohaku.api.QqInteractionApi;
 import love.aira.kohaku.api.QqMessageApi;
 import love.aira.kohaku.api.QqOpenApiClient;
 import love.aira.kohaku.config.KohakuConfig;
@@ -36,6 +37,7 @@ class KohakuAutoConfigurationTest {
             assertThat(context).hasSingleBean(AccessTokenProvider.class);
             assertThat(context).hasSingleBean(QqOpenApiClient.class);
             assertThat(context).hasSingleBean(QqGatewayApi.class);
+            assertThat(context).hasSingleBean(QqInteractionApi.class);
             assertThat(context).hasSingleBean(QqMessageApi.class);
             assertThat(context).hasSingleBean(QqMediaApi.class);
             assertThat(context).hasSingleBean(QqChannelMessageApi.class);
