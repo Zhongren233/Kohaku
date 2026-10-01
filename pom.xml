@@ -38,6 +38,15 @@
         </dependencies>
     </dependencyManagement>
 
+    <!-- 发布目标：GitHub Packages。id 必须与 action 里 setup-java 的 server-id 一致 -->
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/zhongren233/kohaku</url>
+        </repository>
+    </distributionManagement>
+
     <build>
         <pluginManagement>
             <plugins>

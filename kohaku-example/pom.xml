@@ -14,6 +14,11 @@
     <name>kohaku-example</name>
     <description>示例机器人：引入 starter + 少量配置即可连上网关</description>
 
+    <properties>
+        <!-- 示例应用只用于本地演示/构建校验，不发布到仓库 -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>love.aira</groupId>
