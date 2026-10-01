@@ -32,8 +32,12 @@ public class EchoGroupHandler implements BotEventHandler<GroupAtMessageCreateEve
     @Override
     public HandlerResult handle(GroupAtMessageCreateEvent event) {
         GroupMessage message = event.payload();
+        String content = message.content();
+        if (content != null && content.trim().startsWith("/")) {
+            return HandlerResult.IGNORED;   // 命令交给对应功能（如 /card）处理
+        }
         log.info("收到群消息 group={} member={} content={}", message.groupOpenid(), message.author().memberOpenid(),
-                message.content());
+                content);
         messages.sendToGroup(message.groupOpenid(),
                 SendMessageRequest.text("echo: " + message.content()).replyingTo(message.id(), 1));
         return HandlerResult.CONSUMED;

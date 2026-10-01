@@ -1,0 +1,151 @@
+package love.aira.kohaku.card;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+import java.util.List;
+import java.util.Map;
+import love.aira.kohaku.api.QqMessageApi;
+import love.aira.kohaku.api.model.Keyboard;
+import love.aira.kohaku.api.model.SendMessageRequest;
+import love.aira.kohaku.feature.ButtonContext;
+import love.aira.kohaku.feature.ButtonHandler;
+import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
+import love.aira.kohaku.gateway.event.InteractionCreateEvent;
+import love.aira.kohaku.gateway.event.model.C2cMessage;
+import love.aira.kohaku.gateway.event.model.InteractionCreate;
+import love.aira.kohaku.gateway.event.model.InteractionData;
+import love.aira.kohaku.gateway.event.model.InteractionResolved;
+import love.aira.kohaku.gateway.event.model.MessageAuthor;
+import love.aira.kohaku.gateway.handler.BotEventHandler;
+import love.aira.kohaku.gateway.handler.HandlerResult;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import tools.jackson.databind.json.JsonMapper;
+
+/** 示例功能 `\\/card`：分页渲染、命令入口与翻页按钮回调。 */
+class CardFeatureTest {
+
+    private final QqMessageApi messages = mock(QqMessageApi.class);
+    private final CardFeature feature = new CardFeature(messages);
+
+    @Test
+    void rendersFirstPageWithNextButtonOnly() {
+        SendMessageRequest request = CardFeature.page(1);
+
+        assertThat(request.content())
+                .contains("卡片列表 1/3")
+                .contains("C-001").contains("C-005")
+                .doesNotContain("C-006");
+        assertThat(buttonIds(request)).containsExactly("page", "next");
+        assertThat(buttonData(request, 1)).isEqualTo("card:next:p=2");
+    }
+
+    @Test
+    void rendersLastPageWithoutNextButtonAndClampsOverflow() {
+        SendMessageRequest last = CardFeature.page(3);
+        assertThat(last.content()).contains("卡片列表 3/3").contains("C-011").contains("C-012");
+        assertThat(buttonIds(last)).containsExactly("prev", "page");
+        assertThat(buttonData(last, 0)).isEqualTo("card:prev:p=2");
+
+        assertThat(CardFeature.page(99).content()).contains("卡片列表 3/3");   // 越界页码被夹回
+    }
+
+    @Test
+    void commandEntryRepliesWithFirstPage() {
+        BotEventHandler<C2cMessageCreateEvent> entry = c2cEntry();
+        C2cMessageCreateEvent event = c2cMessage("/card");
+
+        assertThat(entry.handle(event)).isEqualTo(HandlerResult.CONSUMED);
+
+        SendMessageRequest sent = captureSentToUser();
+        assertThat(sent.content()).contains("卡片列表 1/3");
+        assertThat(sent.msgId()).isEqualTo("MSG_1");           // 被动回复
+        assertThat(sent.msgSeq()).isEqualTo(1);
+    }
+
+    @Test
+    void commandEntryIgnoresOtherMessages() {
+        BotEventHandler<C2cMessageCreateEvent> entry = c2cEntry();
+
+        assertThat(entry.handle(c2cMessage("你好"))).isEqualTo(HandlerResult.IGNORED);
+        assertThat(entry.handle(c2cMessage(null))).isEqualTo(HandlerResult.IGNORED);
+        assertThat(entry.handle(c2cMessage("/other"))).isEqualTo(HandlerResult.IGNORED);
+        verifyNoInteractions(messages);
+    }
+
+    @Test
+    void nextButtonRendersFollowingPageAndRepliesToTheInteraction() {
+        assertThat(button("next").onButton(context("card:next:p=1", Map.of("p", "1"))))
+                .isEqualTo(HandlerResult.CONSUMED);
+
+        SendMessageRequest sent = captureSentToUser();
+        assertThat(sent.content()).contains("卡片列表 2/3").contains("C-006").contains("C-010");
+        assertThat(sent.eventId()).isEqualTo("EVENT_ID");      // 用互动事件 id 被动回复
+        assertThat(sent.msgSeq()).isNull();
+        assertThat(buttonIds(sent)).containsExactly("prev", "page", "next");   // 第二页前后都有
+    }
+
+    @Test
+    void pageButtonReRendersCurrentPage() {
+        assertThat(button("page").onButton(context("card:page:p=2", Map.of("p", "2"))))
+                .isEqualTo(HandlerResult.CONSUMED);
+
+        assertThat(captureSentToUser().content()).contains("卡片列表 2/3");
+    }
+
+    @Test
+    void recognizesCommandWithArguments() {
+        assertThat(CardFeature.isCommand("/card")).isTrue();
+        assertThat(CardFeature.isCommand("  /card 3 ")).isTrue();
+        assertThat(CardFeature.isCommand("/cards")).isFalse();
+        assertThat(CardFeature.isCommand(null)).isFalse();
+    }
+
+    @SuppressWarnings("unchecked")
+    private BotEventHandler<C2cMessageCreateEvent> c2cEntry() {
+        return (BotEventHandler<C2cMessageCreateEvent>) feature.messageHandlers().getFirst();
+    }
+
+    private ButtonHandler button(String action) {
+        return feature.buttonHandlers().stream()
+                .filter(handler -> handler.action().equals(action))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("未注册的按钮动作: " + action));
+    }
+
+    private SendMessageRequest captureSentToUser() {
+        ArgumentCaptor<SendMessageRequest> captor = ArgumentCaptor.forClass(SendMessageRequest.class);
+        verify(messages).sendToUser(eq("USER_OPENID"), captor.capture());
+        return captor.getValue();
+    }
+
+    private static List<String> buttonIds(SendMessageRequest request) {
+        return request.keyboard().content().rows().getFirst().buttons().stream()
+                .map(Keyboard.Button::id)
+                .toList();
+    }
+
+    private static String buttonData(SendMessageRequest request, int index) {
+        return request.keyboard().content().rows().getFirst().buttons().get(index).action().data();
+    }
+
+    private static C2cMessageCreateEvent c2cMessage(String content) {
+        MessageAuthor author = new MessageAuthor("id", "nick", false, null, null, null, "USER_OPENID", null, null);
+        C2cMessage message = new C2cMessage("MSG_1", author, content, "2026-10-02T00:00:00+08:00", 0, null, null, null,
+                null);
+        return new C2cMessageCreateEvent(1, new JsonMapper().readTree("{}"), message);
+    }
+
+    private static ButtonContext context(String buttonData, Map<String, String> state) {
+        InteractionResolved resolved = new InteractionResolved(buttonData, "btn-1", null, null, null, null, null, null,
+                null, null);
+        InteractionCreate payload = new InteractionCreate("EVENT_ID", 11, "c2c", 2, "2026-10-02T00:00:00+08:00",
+                null, null, "USER_OPENID", null, null, new InteractionData(11, resolved), 1, "102012345");
+        InteractionCreateEvent event = new InteractionCreateEvent(1, new JsonMapper().readTree("{}"), payload);
+        return new ButtonContext(event, "card", "next", state, "btn-1", buttonData, 2, "c2c", "USER_OPENID", null, null);
+    }
+}

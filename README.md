@@ -173,10 +173,38 @@ kohaku:
 纯 Java（无 Spring）：`new EventDispatcher(List.of(handler1, handler2), unconsumed -> …)`，执行顺序即列表顺序。
 `kohaku-example` 内含两个可运行示例处理器（`EchoC2cHandler`、`EchoGroupHandler`）。
 
+## 功能模块与按钮回调（方案 A：自描述 data）
+
+一个**功能**承担「消息入口 + 自己的按钮」，按钮点击按 data 里的命名空间投递回该功能 —— 例如 `/card` 列表翻页：
+
+```java
+@Component
+public class CardFeature implements BotFeature {
+    public String id() { return "card"; }                        // 按钮 data 的命名空间
+
+    public List<BotEventHandler<?>> messageHandlers() { ... }     // 入口：/card → 第 1 页 + 翻页键盘
+    public List<ButtonHandler> buttonHandlers() { ... }           // 翻页：next / prev / page
+}
+```
+
+按钮 data 由 `FeatureKeyboards` 生成，格式 `featureId:action[:k=v;k=v]`（值 URL 编码），如 `card:next:p=2`；
+点击后 `data.resolved.button_data` **原样回传**，`InteractionRouter` 解析后投递给 `card` 功能的 `next` 处理器，
+因此翻页不会落到别的 handler。
+
+- **状态放在 data 里（方案 A）**：机器人侧无状态、跨重启可用；状态过大时应改用「token + 服务端会话表」。
+- 助手：`FeatureKeyboards.pagination(featureId, pagination, state)` 生成 上一页/页码/下一页；
+  `Pagination.of(page, size, total)` 负责页码夹取与切片。
+- 未命中（未知功能 / 未知动作 / data 非法 / 非按钮互动）→ `IGNORED`，继续走处理链并最终落到 `@EventListener`；
+- 回复用 `InteractionReplies.reply(messages, ctx, request)`：自动按场景选单聊/群聊并用互动事件 id 做被动回复。
+- 平台约束：单聊/群聊**没有编辑消息接口** → 每次翻页是发一条新消息（旧键盘随旧消息失效）；
+  被动回复时效 单聊 60 分钟 / 群聊 5 分钟。
+
+`kohaku-example` 内含完整可跑的 `/card`（12 条卡片、每页 5 条、支持上一页/下一页/页码）。
+
 ## 构建与验证
 
 ```bash
-./mvnw clean test                              # 88 例：核心(事件反序列化/配置/编码/报文/关闭码) + 自动配置 + 假网关端到端 + 示例
+./mvnw clean test                              # 115 例：核心(事件反序列化/配置/编码/报文/关闭码) + 自动配置 + 假网关端到端 + 示例
 ./mvnw -DskipTests install                     # 安装本地坐标
 ./mvnw -pl kohaku-example spring-boot:run      # 用示例机器人真机连网关
 ```

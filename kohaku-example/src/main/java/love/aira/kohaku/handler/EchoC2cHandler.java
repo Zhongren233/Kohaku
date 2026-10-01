@@ -37,6 +37,10 @@ public class EchoC2cHandler implements BotEventHandler<C2cMessageCreateEvent> {
     @Override
     public HandlerResult handle(C2cMessageCreateEvent event) {
         C2cMessage message = event.payload();
+        String content = message.content();
+        if (content != null && content.trim().startsWith("/")) {
+            return HandlerResult.IGNORED;   // 命令交给对应功能（如 /card）处理
+        }
         String openid = message.author().userOpenid();
         log.info("收到单聊消息 openid={} msg_idx={} content={}", openid, message.messageScene().messageIndex(),
                 message.content());

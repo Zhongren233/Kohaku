@@ -4,9 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import love.aira.kohaku.feature.BotFeature;
+import love.aira.kohaku.feature.ButtonContext;
+import love.aira.kohaku.feature.ButtonHandler;
+import love.aira.kohaku.feature.InteractionRouter;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
+import love.aira.kohaku.gateway.event.InteractionCreateEvent;
 import love.aira.kohaku.gateway.event.model.C2cMessage;
+import love.aira.kohaku.gateway.event.model.InteractionCreate;
+import love.aira.kohaku.gateway.event.model.InteractionData;
+import love.aira.kohaku.gateway.event.model.InteractionResolved;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
 import love.aira.kohaku.gateway.handler.EventDispatcher;
 import love.aira.kohaku.gateway.handler.HandlerResult;
@@ -41,7 +49,8 @@ class KohakuEventDispatchTest {
                 .run(context -> {
                     EventDispatcher dispatcher = context.getBean(EventDispatcher.class);
                     assertThat(dispatcher.handlers()).extracting(handler -> handler.getClass().getSimpleName())
-                            .containsExactly("ConsumingHandler", "IgnoringHandler");   // @Order(1) 在 @Order(2) 之前
+                            .startsWith("ConsumingHandler", "IgnoringHandler")   // @Order(1) 在 @Order(2) 之前
+                            .contains("InteractionRouter");                     // 互动路由也在链上
 
                     dispatcher.dispatch(c2c());
 
@@ -68,7 +77,7 @@ class KohakuEventDispatchTest {
                 .run(context -> {
                     assertThat(context.getBean(EventDispatcher.class).handlers())
                             .extracting(handler -> handler.getClass().getSimpleName())
-                            .containsExactly("BetaHandler", "AlphaHandler");
+                            .startsWith("BetaHandler", "AlphaHandler");   // 配置声明顺序优先于 @Order
 
                     context.getBean(EventDispatcher.class).dispatch(c2c());
 
@@ -85,6 +94,63 @@ class KohakuEventDispatchTest {
                     assertThat(context.getStartupFailure())
                             .hasStackTraceContaining("kohaku.qq.handler-order 中的 Bean 不存在: missingHandler");
                 });
+    }
+
+    @Test
+    void routesButtonClicksToFeatureBeanAndMergesItsMessageHandlers() {
+        runner.withUserConfiguration(DemoFeatureConfiguration.class, FallbackRecorderConfiguration.class)
+                .run(context -> {
+                    assertThat(context.getBean(InteractionRouter.class).features())
+                            .extracting(BotFeature::id).contains("demo");
+
+                    DemoFeature feature = context.getBean(DemoFeature.class);
+                    context.getBean(EventDispatcher.class).dispatch(buttonClick("demo:next:p=2"));
+
+                    assertThat(feature.clicks).containsExactly("2");                      // 点击回到所属功能
+                    assertThat(context.getBean(FallbackRecorder.class).received).isEmpty();   // 已消费，不再发布
+                });
+    }
+
+    private static InteractionCreateEvent buttonClick(String buttonData) {
+        InteractionResolved resolved = new InteractionResolved(buttonData, "btn-1", null, null, null, null, null, null,
+                null, null);
+        InteractionCreate payload = new InteractionCreate("EVENT_ID", 11, "c2c", 2, "2026-10-02T00:00:00+08:00",
+                null, null, "USER_OPENID", null, null, new InteractionData(11, resolved), 1, "102012345");
+        return new InteractionCreateEvent(1, new JsonMapper().readTree("{}"), payload);
+    }
+
+    /** 被测功能：只注册一个 next 动作。 */
+    static class DemoFeature implements BotFeature {
+
+        final List<String> clicks = new CopyOnWriteArrayList<>();
+
+        @Override
+        public String id() {
+            return "demo";
+        }
+
+        @Override
+        public List<ButtonHandler> buttonHandlers() {
+            return List.of(new ButtonHandler() {
+                @Override
+                public String action() {
+                    return "next";
+                }
+
+                @Override
+                public HandlerResult onButton(ButtonContext context) {
+                    clicks.add(Integer.toString(context.intState("p", 1)));
+                    return HandlerResult.CONSUMED;
+                }
+            });
+        }
+    }
+
+    static class DemoFeatureConfiguration {
+        @Bean
+        DemoFeature demoFeature() {
+            return new DemoFeature();
+        }
     }
 
     private static C2cMessageCreateEvent c2c() {

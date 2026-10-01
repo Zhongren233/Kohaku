@@ -13,6 +13,8 @@ import love.aira.kohaku.api.QqMediaApi;
 import love.aira.kohaku.api.QqMessageApi;
 import love.aira.kohaku.api.QqOpenApiClient;
 import love.aira.kohaku.config.QqBotProperties;
+import love.aira.kohaku.feature.BotFeature;
+import love.aira.kohaku.feature.InteractionRouter;
 import love.aira.kohaku.gateway.QqGatewayClient;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
 import love.aira.kohaku.gateway.handler.EventDispatcher;
@@ -96,15 +98,29 @@ public class KohakuAutoConfiguration {
     }
 
     /**
-     * 事件处理链：先按 {@code kohaku.qq.handler-order} 声明的 Bean 名称顺序，其余按 {@code @Order}/{@code Ordered}；
-     * 处理器返回 CONSUMED 即终止，全部 IGNORED 时事件落到兜底消费者 —— 发布为容器事件供 {@code @EventListener} 使用。
+     * 互动路由：把按钮点击投递给产生该按钮的功能（{@link BotFeature}）。它本身是普通
+     * {@link BotEventHandler}，因此可用 {@code kohaku.qq.handler-order} 调整它在链中的位置。
      */
     @Bean
     @ConditionalOnMissingBean
-    EventDispatcher qqEventDispatcher(List<BotEventHandler<?>> handlers, QqBotProperties properties,
-                                      ApplicationEventPublisher eventPublisher, ListableBeanFactory beanFactory) {
-        return new EventDispatcher(orderHandlers(handlers, properties.handlerOrder(), beanFactory),
-                eventPublisher::publishEvent);
+    InteractionRouter qqInteractionRouter(List<BotFeature> features) {
+        return new InteractionRouter(features);
+    }
+
+    /**
+     * 事件处理链：先按 {@code kohaku.qq.handler-order} 声明的 Bean 名称顺序，其余按 {@code @Order}/{@code Ordered}，
+     * 最后追加各功能自带的入口处理器；处理器返回 CONSUMED 即终止，全部 IGNORED 时事件落到兜底消费者 ——
+     * 发布为容器事件供 {@code @EventListener} 使用。
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    EventDispatcher qqEventDispatcher(List<BotEventHandler<?>> handlers, List<BotFeature> features,
+                                      QqBotProperties properties, ApplicationEventPublisher eventPublisher,
+                                      ListableBeanFactory beanFactory) {
+        List<BotEventHandler<?>> ordered = orderHandlers(handlers, properties.handlerOrder(), beanFactory);
+        List<BotEventHandler<?>> withFeatureEntries = new ArrayList<>(ordered);
+        features.forEach(feature -> withFeatureEntries.addAll(feature.messageHandlers()));
+        return new EventDispatcher(withFeatureEntries, eventPublisher::publishEvent);
     }
 
     private static List<BotEventHandler<?>> orderHandlers(List<BotEventHandler<?>> handlers, List<String> declaredOrder,

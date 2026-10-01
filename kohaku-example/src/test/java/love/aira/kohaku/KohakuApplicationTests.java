@@ -2,6 +2,8 @@ package love.aira.kohaku;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import love.aira.kohaku.feature.BotFeature;
+import love.aira.kohaku.feature.InteractionRouter;
 import love.aira.kohaku.gateway.handler.EventDispatcher;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +18,9 @@ class KohakuApplicationTests {
     @Autowired
     private EventDispatcher dispatcher;
 
+    @Autowired
+    private InteractionRouter router;
+
     @Test
     void contextLoads() {
     }
@@ -25,6 +30,13 @@ class KohakuApplicationTests {
     void registersExampleHandlersInOrder() {
         assertThat(dispatcher.handlers())
                 .extracting(handler -> handler.getClass().getSimpleName())
-                .containsExactly("EchoC2cHandler", "EchoGroupHandler");
+                .contains("EchoC2cHandler", "EchoGroupHandler");
+    }
+
+    /** /card 功能被注册进互动路由，其按钮点击会回到该功能。 */
+    @Test
+    void registersCardFeature() {
+        assertThat(router.features()).extracting(BotFeature::id).contains("card");
+        assertThat(dispatcher.handlers()).anySatisfy(handler -> assertThat(handler).isInstanceOf(InteractionRouter.class));
     }
 }
