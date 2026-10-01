@@ -34,8 +34,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record QqBotProperties(
         String appId,
         String appSecret,
-        @DefaultValue("https://api.sgroup.qq.com") String apiBaseUrl,
-        @DefaultValue("https://bots.qq.com/app/getAppAccessToken") String tokenUrl,
+        @DefaultValue("https://api.bot.qq.com") String apiBaseUrl,
+        @DefaultValue("https://api.bot.qq.com/app/getAppAccessToken") String tokenUrl,
         @DefaultValue("PUBLIC_GUILD_MESSAGES") List<QqIntent> intents,
         @DefaultValue("0") int shardIndex,
         @DefaultValue("1") int shardTotal,

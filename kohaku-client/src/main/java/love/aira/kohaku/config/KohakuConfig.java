@@ -34,12 +34,12 @@ public record KohakuConfig(
         Duration reconnectMaxDelay,
         boolean sandbox) {
 
-    /** 正式环境开放平台地址。 */
-    public static final String DEFAULT_API_BASE_URL = "https://api.sgroup.qq.com";
-    /** 沙箱环境开放平台地址。 */
-    public static final String SANDBOX_API_BASE_URL = "https://sandbox.api.sgroup.qq.com";
-    /** AccessToken 获取地址。 */
-    public static final String DEFAULT_TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken";
+    /** 正式环境开放平台地址：官方文档「API 调用指南」的统一请求地址。 */
+    public static final String DEFAULT_API_BASE_URL = "https://api.bot.qq.com";
+    /** 沙箱环境开放平台地址（v2 文档未单列，按统一域名推断；实测可解析并返回同一套错误码）。 */
+    public static final String SANDBOX_API_BASE_URL = "https://sandbox.api.bot.qq.com";
+    /** AccessToken 获取地址：官方文档「获取访问凭证」。（旧域名 https://bots.qq.com/... 目前仍可用） */
+    public static final String DEFAULT_TOKEN_URL = "https://api.bot.qq.com/app/getAppAccessToken";
 
     /** 常用默认值：只需凭据与订阅的事件。 */
     public static KohakuConfig of(String appId, String appSecret, List<QqIntent> intents) {

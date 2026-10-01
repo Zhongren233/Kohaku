@@ -16,8 +16,8 @@ kohaku:
       - GROUP_AND_C2C_EVENT      # 群/单聊事件，需在开放平台申请
       - INTERACTION              # 按钮/快捷菜单等互动回调，需在开放平台申请；缺它按钮点击不会下发
     # 以下均为默认值，按需覆盖即可
-    # api-base-url: https://api.sgroup.qq.com   # 沙箱：https://sandbox.api.sgroup.qq.com
-    # token-url: https://bots.qq.com/app/getAppAccessToken
+    # api-base-url: https://api.bot.qq.com   # 沙箱：https://sandbox.api.bot.qq.com
+    # token-url: https://api.bot.qq.com/app/getAppAccessToken
     # handler-order:               # 事件处理器执行顺序（Bean 名称；未列出的按 @Order 排在其后）
     #   - echoC2cHandler
     #   - echoGroupHandler

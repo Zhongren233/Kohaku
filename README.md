@@ -86,8 +86,8 @@ replies.sendToChannel(event, ChannelMessageRequest.text("hi"));   // 频道 / �
 | --- | --- | --- |
 | `kohaku.qq.app-id` / `app-secret` | 无（必填） | 机器人凭据，可用环境变量 `KOHAKU_QQ_APPID` / `KOHAKU_QQ_APPSECRET` |
 | `kohaku.qq.intents` | `[PUBLIC_GUILD_MESSAGES]` | 多选枚举 `QqIntent`，位掩码自动合成 |
-| `kohaku.qq.api-base-url` | `https://api.sgroup.qq.com` | 开放平台地址 |
-| `kohaku.qq.token-url` | `https://bots.qq.com/app/getAppAccessToken` | AccessToken 接口 |
+| `kohaku.qq.api-base-url` | `https://api.bot.qq.com` | 开放平台地址（文档「统一请求地址」） |
+| `kohaku.qq.token-url` | `https://api.bot.qq.com/app/getAppAccessToken` | AccessToken 接口 |
 | `kohaku.qq.sandbox` | `false` | 为真时强制使用沙箱地址 |
 | `kohaku.qq.enabled` | `true` | 置 false 整体关闭 |
 | `kohaku.qq.auto-start` | `true` | 是否随容器连接/断开网关 |
