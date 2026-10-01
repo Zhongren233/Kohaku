@@ -13,6 +13,7 @@ import love.aira.kohaku.api.QqMediaApi;
 import love.aira.kohaku.api.QqMessageApi;
 import love.aira.kohaku.api.QqOpenApiClient;
 import love.aira.kohaku.config.QqBotProperties;
+import love.aira.kohaku.config.QqIntent;
 import love.aira.kohaku.feature.BotFeature;
 import love.aira.kohaku.feature.InteractionRouter;
 import love.aira.kohaku.gateway.QqGatewayClient;
@@ -100,10 +101,19 @@ public class KohakuAutoConfiguration {
     /**
      * 互动路由：把按钮点击投递给产生该按钮的功能（{@link BotFeature}）。它本身是普通
      * {@link BotEventHandler}，因此可用 {@code kohaku.qq.handler-order} 调整它在链中的位置。
+     *
+     * <p>注册了按钮回调却没有订阅 {@code INTERACTION(1<<26)} 意图时直接启动失败：否则平台不会下发
+     * 按钮点击事件，客户端只会一直等待并提示"请求超时"，极难排查。
      */
     @Bean
     @ConditionalOnMissingBean
-    InteractionRouter qqInteractionRouter(List<BotFeature> features) {
+    InteractionRouter qqInteractionRouter(List<BotFeature> features, QqBotProperties properties) {
+        long buttonHandlers = features.stream().mapToLong(feature -> feature.buttonHandlers().size()).sum();
+        if (buttonHandlers > 0 && (properties.toConfig().intentsMask() & QqIntent.INTERACTION.bit()) == 0) {
+            throw new IllegalStateException("检测到 " + buttonHandlers + " 个按钮回调（BotFeature.buttonHandlers），"
+                    + "但 kohaku.qq.intents 未包含 INTERACTION（1<<26）：按钮点击事件不会被下发，"
+                    + "客户端会一直等待并提示超时。请在 kohaku.qq.intents 中加入 INTERACTION（需在开放平台申请该权限）");
+        }
         return new InteractionRouter(features);
     }
 

@@ -14,6 +14,7 @@ kohaku:
     intents: # 多选枚举，默认 [PUBLIC_GUILD_MESSAGES]（频道内 @机器人 消息）
       - PUBLIC_GUILD_MESSAGES    # 基础权限
       - GROUP_AND_C2C_EVENT      # 群/单聊事件，需在开放平台申请
+      - INTERACTION              # 按钮/快捷菜单等互动回调，需在开放平台申请；缺它按钮点击不会下发
     # 以下均为默认值，按需覆盖即可
     # api-base-url: https://api.sgroup.qq.com   # 沙箱：https://sandbox.api.sgroup.qq.com
     # token-url: https://bots.qq.com/app/getAppAccessToken

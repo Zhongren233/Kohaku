@@ -165,7 +165,11 @@ public class EchoHandler implements BotEventHandler<C2cMessageCreateEvent> {
 ```yaml
 kohaku:
   qq:
-    handler-order:            # Bean 名称列表，优先于 @Order；未列出的处理器排在其后
+    intents:                 # 按钮回调属于 INTERACTION(1<<26) 意图，必须订阅，
+      - PUBLIC_GUILD_MESSAGES  # 否则平台不下发按钮点击事件，客户端只会一直提示「请求超时」
+      - GROUP_AND_C2C_EVENT
+      - INTERACTION          # 需在开放平台申请该权限；框架检测到按钮回调却未订阅时启动即失败
+    handler-order:           # Bean 名称列表，优先于 @Order；未列出的处理器排在其后
       - echoC2cHandler
       - echoGroupHandler
 ```

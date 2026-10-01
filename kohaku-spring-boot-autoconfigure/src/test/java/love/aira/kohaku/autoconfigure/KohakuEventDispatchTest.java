@@ -36,7 +36,8 @@ class KohakuEventDispatchTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class, KohakuAutoConfiguration.class))
             .withPropertyValues("kohaku.qq.app-id=test-app", "kohaku.qq.app-secret=test-secret",
-                    "kohaku.qq.auto-start=false");
+                    "kohaku.qq.auto-start=false", "kohaku.qq.intents[0]=PUBLIC_GUILD_MESSAGES",
+                    "kohaku.qq.intents[1]=INTERACTION");
 
     @BeforeEach
     void reset() {
@@ -108,6 +109,20 @@ class KohakuEventDispatchTest {
 
                     assertThat(feature.clicks).containsExactly("2");                      // 点击回到所属功能
                     assertThat(context.getBean(FallbackRecorder.class).received).isEmpty();   // 已消费，不再发布
+                });
+    }
+
+    @Test
+    void failsFastWhenButtonCallbacksRegisteredWithoutInteractionIntent() {
+        new ApplicationContextRunner()
+                .withConfiguration(
+                        AutoConfigurations.of(JacksonAutoConfiguration.class, KohakuAutoConfiguration.class))
+                .withPropertyValues("kohaku.qq.app-id=test-app", "kohaku.qq.app-secret=test-secret",
+                        "kohaku.qq.auto-start=false", "kohaku.qq.intents=PUBLIC_GUILD_MESSAGES")
+                .withUserConfiguration(DemoFeatureConfiguration.class)
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasStackTraceContaining("INTERACTION");
                 });
     }
 
