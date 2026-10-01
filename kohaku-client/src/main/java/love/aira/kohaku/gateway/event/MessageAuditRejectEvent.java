@@ -15,8 +15,8 @@ public final class MessageAuditRejectEvent extends BotDispatchEvent {
 
     private final MessageAudited payload;
 
-    public MessageAuditRejectEvent(long seq, JsonNode raw, MessageAudited payload) {
-        super(seq, TYPE, raw);
+    public MessageAuditRejectEvent(long seq, String eventId, JsonNode raw, MessageAudited payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

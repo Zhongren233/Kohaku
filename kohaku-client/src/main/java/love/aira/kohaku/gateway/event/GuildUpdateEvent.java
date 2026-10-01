@@ -15,8 +15,8 @@ public final class GuildUpdateEvent extends BotDispatchEvent {
 
     private final Guild payload;
 
-    public GuildUpdateEvent(long seq, JsonNode raw, Guild payload) {
-        super(seq, TYPE, raw);
+    public GuildUpdateEvent(long seq, String eventId, JsonNode raw, Guild payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

@@ -33,7 +33,7 @@ class InteractionRouterTest {
         assertThat(context.featureId()).isEqualTo("card");
         assertThat(context.action()).isEqualTo("next");
         assertThat(context.intState("p", 1)).isEqualTo(2);
-        assertThat(context.eventId()).isEqualTo("EVENT_ID");
+        assertThat(context.eventId()).isEqualTo("INTERACTION_CREATE:EVENT_ID");   // 用最外层事件 id
         assertThat(context.buttonId()).isEqualTo("btn-1");
         assertThat(context.isC2c()).isTrue();
         assertThat(context.userOpenid()).isEqualTo("USER_OPENID");
@@ -135,7 +135,7 @@ class InteractionRouterTest {
         InteractionCreate payload = new InteractionCreate("EVENT_ID", type, chatType == 2 ? "c2c" : "group", chatType,
                 "2026-10-02T00:00:00+08:00", null, null, userOpenid, groupOpenid, null,
                 new InteractionData(type, resolved), 1, "102012345");
-        return new InteractionCreateEvent(1, new JsonMapper().readTree("{}"), payload);
+        return new InteractionCreateEvent(1, "INTERACTION_CREATE:EVENT_ID", new JsonMapper().readTree("{}"), payload);
     }
 
     /** 被测功能：只注册一个 next 动作。 */

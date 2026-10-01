@@ -15,8 +15,8 @@ public final class GroupMsgReceiveEvent extends BotDispatchEvent {
 
     private final GroupMsgReceive payload;
 
-    public GroupMsgReceiveEvent(long seq, JsonNode raw, GroupMsgReceive payload) {
-        super(seq, TYPE, raw);
+    public GroupMsgReceiveEvent(long seq, String eventId, JsonNode raw, GroupMsgReceive payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

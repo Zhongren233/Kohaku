@@ -15,8 +15,8 @@ public final class GroupDelRobotEvent extends BotDispatchEvent {
 
     private final GroupDelRobot payload;
 
-    public GroupDelRobotEvent(long seq, JsonNode raw, GroupDelRobot payload) {
-        super(seq, TYPE, raw);
+    public GroupDelRobotEvent(long seq, String eventId, JsonNode raw, GroupDelRobot payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

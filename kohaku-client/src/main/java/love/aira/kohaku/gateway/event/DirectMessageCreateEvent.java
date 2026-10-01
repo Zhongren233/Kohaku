@@ -15,8 +15,8 @@ public final class DirectMessageCreateEvent extends BotDispatchEvent {
 
     private final ChannelMessage payload;
 
-    public DirectMessageCreateEvent(long seq, JsonNode raw, ChannelMessage payload) {
-        super(seq, TYPE, raw);
+    public DirectMessageCreateEvent(long seq, String eventId, JsonNode raw, ChannelMessage payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

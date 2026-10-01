@@ -15,8 +15,8 @@ public final class MessageCreateEvent extends BotDispatchEvent {
 
     private final ChannelMessage payload;
 
-    public MessageCreateEvent(long seq, JsonNode raw, ChannelMessage payload) {
-        super(seq, TYPE, raw);
+    public MessageCreateEvent(long seq, String eventId, JsonNode raw, ChannelMessage payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

@@ -36,9 +36,12 @@ public record ButtonContext(
         state = state == null ? Map.of() : Map.copyOf(state);
     }
 
-    /** 互动事件 id（事件体里的 {@code id}），被动回复时用作 {@code event_id}。 */
+    /**
+     * 被动回复用的 {@code event_id} —— 取**事件最外层 id**（形如 {@code INTERACTION_CREATE:963df69c-…}）。
+     * 实测：用事件体 {@code d.id} 会被平台以 40034025「请求参数event_id无效」拒绝。
+     */
     public String eventId() {
-        return interaction.payload() == null ? null : interaction.payload().id();
+        return interaction.eventId();
     }
 
     public boolean isGuild() {

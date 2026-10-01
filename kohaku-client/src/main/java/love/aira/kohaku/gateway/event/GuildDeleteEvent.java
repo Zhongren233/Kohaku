@@ -15,8 +15,8 @@ public final class GuildDeleteEvent extends BotDispatchEvent {
 
     private final Guild payload;
 
-    public GuildDeleteEvent(long seq, JsonNode raw, Guild payload) {
-        super(seq, TYPE, raw);
+    public GuildDeleteEvent(long seq, String eventId, JsonNode raw, Guild payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

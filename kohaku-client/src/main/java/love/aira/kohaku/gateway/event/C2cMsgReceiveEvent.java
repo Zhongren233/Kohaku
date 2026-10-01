@@ -15,8 +15,8 @@ public final class C2cMsgReceiveEvent extends BotDispatchEvent {
 
     private final C2cMsgReceive payload;
 
-    public C2cMsgReceiveEvent(long seq, JsonNode raw, C2cMsgReceive payload) {
-        super(seq, TYPE, raw);
+    public C2cMsgReceiveEvent(long seq, String eventId, JsonNode raw, C2cMsgReceive payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

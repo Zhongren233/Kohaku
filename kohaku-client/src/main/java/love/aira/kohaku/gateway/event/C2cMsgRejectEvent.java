@@ -15,8 +15,8 @@ public final class C2cMsgRejectEvent extends BotDispatchEvent {
 
     private final C2cMsgReject payload;
 
-    public C2cMsgRejectEvent(long seq, JsonNode raw, C2cMsgReject payload) {
-        super(seq, TYPE, raw);
+    public C2cMsgRejectEvent(long seq, String eventId, JsonNode raw, C2cMsgReject payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

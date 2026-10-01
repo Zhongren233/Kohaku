@@ -15,8 +15,8 @@ public final class GroupMessageCreateEvent extends BotDispatchEvent {
 
     private final GroupMessage payload;
 
-    public GroupMessageCreateEvent(long seq, JsonNode raw, GroupMessage payload) {
-        super(seq, TYPE, raw);
+    public GroupMessageCreateEvent(long seq, String eventId, JsonNode raw, GroupMessage payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

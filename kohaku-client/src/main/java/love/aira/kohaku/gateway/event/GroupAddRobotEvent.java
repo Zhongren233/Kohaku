@@ -15,8 +15,8 @@ public final class GroupAddRobotEvent extends BotDispatchEvent {
 
     private final GroupAddRobot payload;
 
-    public GroupAddRobotEvent(long seq, JsonNode raw, GroupAddRobot payload) {
-        super(seq, TYPE, raw);
+    public GroupAddRobotEvent(long seq, String eventId, JsonNode raw, GroupAddRobot payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

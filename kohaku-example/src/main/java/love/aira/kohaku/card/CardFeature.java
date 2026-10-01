@@ -36,7 +36,7 @@ public class CardFeature implements BotFeature {
     public static final String ID = "card";
     public static final String COMMAND = "/card";
     /** 是否用回调按钮（需开放平台开通「互动事件」权限）；false 时用指令按钮，仅依赖消息链路。 */
-    public static final boolean USE_INTERACTION_BUTTONS = false;
+    public static final boolean USE_INTERACTION_BUTTONS = true;
     public static final String ACTION_NEXT = FeatureKeyboards.ACTION_NEXT;
     public static final String ACTION_PREV = FeatureKeyboards.ACTION_PREV;
     public static final String ACTION_PAGE = FeatureKeyboards.ACTION_PAGE;

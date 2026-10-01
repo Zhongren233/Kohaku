@@ -45,7 +45,7 @@ class GatewayEventDecoderTest {
     }
 
     private static BotDispatchEvent decode(String type, String payload) {
-        return DECODER.decode(7, type, json(payload));
+        return DECODER.decode(7, type, "EVENT_ID", json(payload));
     }
 
     @Test
@@ -278,17 +278,17 @@ class GatewayEventDecoderTest {
 
     @Test
     void fallsBackToRawEventForUnknownType() {
-        assertThat(DECODER.decode(1, "SOME_FUTURE_EVENT", json("{\"a\":1}"))).isNull();
-        assertThat(DECODER.decode(1, null, json("{}"))).isNull();
-        assertThat(DECODER.decode(1, "C2C_MESSAGE_CREATE", json("null"))).isNull();
+        assertThat(DECODER.decode(1, "SOME_FUTURE_EVENT", "ID", json("{\"a\":1}"))).isNull();
+        assertThat(DECODER.decode(1, null, "ID", json("{}"))).isNull();
+        assertThat(DECODER.decode(1, "C2C_MESSAGE_CREATE", "ID", json("null"))).isNull();
     }
 
     @Test
     void fallsBackWhenPayloadShapeIsUnexpected() {
         // attachments 期望数组却给了字符串 → 解析失败，返回 null 让调用方用原始事件（不打断长连接）
-        assertThat(DECODER.decode(1, "C2C_MESSAGE_CREATE", json("{\"attachments\":\"oops\"}"))).isNull();
+        assertThat(DECODER.decode(1, "C2C_MESSAGE_CREATE", "ID", json("{\"attachments\":\"oops\"}"))).isNull();
         // 未知字段与缺失字段都应被容忍
-        C2cMessageCreateEvent tolerant = (C2cMessageCreateEvent) DECODER.decode(1, "C2C_MESSAGE_CREATE",
+        C2cMessageCreateEvent tolerant = (C2cMessageCreateEvent) DECODER.decode(1, "C2C_MESSAGE_CREATE", "ID",
                 json("{\"id\":\"m\",\"unknown_field\":123}"));
         assertThat(tolerant.payload().id()).isEqualTo("m");
         assertThat(tolerant.payload().content()).isNull();

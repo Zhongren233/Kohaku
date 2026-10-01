@@ -15,8 +15,8 @@ public final class FriendAddEvent extends BotDispatchEvent {
 
     private final FriendAdd payload;
 
-    public FriendAddEvent(long seq, JsonNode raw, FriendAdd payload) {
-        super(seq, TYPE, raw);
+    public FriendAddEvent(long seq, String eventId, JsonNode raw, FriendAdd payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

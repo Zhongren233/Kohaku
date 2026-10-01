@@ -334,8 +334,9 @@ public class QqGatewayClient {
                 publish(new BotResumedEvent(seq));
             }
             default -> {
-                BotDispatchEvent typed = eventDecoder.decode(seq, type, data);
-                publish(typed != null ? typed : new BotDispatchEvent(seq, type, data));
+                String eventId = payload.id();
+                BotDispatchEvent typed = eventDecoder.decode(seq, type, eventId, data);
+                publish(typed != null ? typed : new BotDispatchEvent(seq, type, eventId, data));
             }
         }
     }

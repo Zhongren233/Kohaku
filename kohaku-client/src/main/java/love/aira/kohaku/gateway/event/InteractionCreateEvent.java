@@ -15,8 +15,8 @@ public final class InteractionCreateEvent extends BotDispatchEvent {
 
     private final InteractionCreate payload;
 
-    public InteractionCreateEvent(long seq, JsonNode raw, InteractionCreate payload) {
-        super(seq, TYPE, raw);
+    public InteractionCreateEvent(long seq, String eventId, JsonNode raw, InteractionCreate payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

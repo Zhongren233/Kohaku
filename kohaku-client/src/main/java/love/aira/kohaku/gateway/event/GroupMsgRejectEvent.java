@@ -15,8 +15,8 @@ public final class GroupMsgRejectEvent extends BotDispatchEvent {
 
     private final GroupMsgReject payload;
 
-    public GroupMsgRejectEvent(long seq, JsonNode raw, GroupMsgReject payload) {
-        super(seq, TYPE, raw);
+    public GroupMsgRejectEvent(long seq, String eventId, JsonNode raw, GroupMsgReject payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

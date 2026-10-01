@@ -65,35 +65,35 @@ public final class GatewayEventDecoder {
     }
 
     /** 按事件名解码；未知事件、空事件体或解析失败时返回 null。 */
-    public BotDispatchEvent decode(long seq, String type, JsonNode data) {
+    public BotDispatchEvent decode(long seq, String type, String eventId, JsonNode data) {
         if (type == null || data == null || data.isNull() || data.isMissingNode()) {
             return null;
         }
         try {
             return switch (type) {
-                case GuildCreateEvent.TYPE -> new GuildCreateEvent(seq, data, payload(data, Guild.class));
-                case GuildUpdateEvent.TYPE -> new GuildUpdateEvent(seq, data, payload(data, Guild.class));
-                case GuildDeleteEvent.TYPE -> new GuildDeleteEvent(seq, data, payload(data, Guild.class));
-                case ChannelCreateEvent.TYPE -> new ChannelCreateEvent(seq, data, payload(data, Channel.class));
-                case ChannelUpdateEvent.TYPE -> new ChannelUpdateEvent(seq, data, payload(data, Channel.class));
-                case ChannelDeleteEvent.TYPE -> new ChannelDeleteEvent(seq, data, payload(data, Channel.class));
-                case C2cMessageCreateEvent.TYPE -> new C2cMessageCreateEvent(seq, data, payload(data, C2cMessage.class));
-                case GroupAtMessageCreateEvent.TYPE -> new GroupAtMessageCreateEvent(seq, data, payload(data, GroupMessage.class));
-                case GroupMessageCreateEvent.TYPE -> new GroupMessageCreateEvent(seq, data, payload(data, GroupMessage.class));
-                case FriendAddEvent.TYPE -> new FriendAddEvent(seq, data, payload(data, FriendAdd.class));
-                case FriendDelEvent.TYPE -> new FriendDelEvent(seq, data, payload(data, FriendDel.class));
-                case C2cMsgRejectEvent.TYPE -> new C2cMsgRejectEvent(seq, data, payload(data, C2cMsgReject.class));
-                case C2cMsgReceiveEvent.TYPE -> new C2cMsgReceiveEvent(seq, data, payload(data, C2cMsgReceive.class));
-                case GroupAddRobotEvent.TYPE -> new GroupAddRobotEvent(seq, data, payload(data, GroupAddRobot.class));
-                case GroupDelRobotEvent.TYPE -> new GroupDelRobotEvent(seq, data, payload(data, GroupDelRobot.class));
-                case GroupMsgRejectEvent.TYPE -> new GroupMsgRejectEvent(seq, data, payload(data, GroupMsgReject.class));
-                case GroupMsgReceiveEvent.TYPE -> new GroupMsgReceiveEvent(seq, data, payload(data, GroupMsgReceive.class));
-                case InteractionCreateEvent.TYPE -> new InteractionCreateEvent(seq, data, payload(data, InteractionCreate.class));
-                case AtMessageCreateEvent.TYPE -> new AtMessageCreateEvent(seq, data, payload(data, ChannelMessage.class));
-                case MessageCreateEvent.TYPE -> new MessageCreateEvent(seq, data, payload(data, ChannelMessage.class));
-                case DirectMessageCreateEvent.TYPE -> new DirectMessageCreateEvent(seq, data, payload(data, ChannelMessage.class));
-                case MessageAuditPassEvent.TYPE -> new MessageAuditPassEvent(seq, data, payload(data, MessageAudited.class));
-                case MessageAuditRejectEvent.TYPE -> new MessageAuditRejectEvent(seq, data, payload(data, MessageAudited.class));
+                case GuildCreateEvent.TYPE -> new GuildCreateEvent(seq, eventId, data, payload(data, Guild.class));
+                case GuildUpdateEvent.TYPE -> new GuildUpdateEvent(seq, eventId, data, payload(data, Guild.class));
+                case GuildDeleteEvent.TYPE -> new GuildDeleteEvent(seq, eventId, data, payload(data, Guild.class));
+                case ChannelCreateEvent.TYPE -> new ChannelCreateEvent(seq, eventId, data, payload(data, Channel.class));
+                case ChannelUpdateEvent.TYPE -> new ChannelUpdateEvent(seq, eventId, data, payload(data, Channel.class));
+                case ChannelDeleteEvent.TYPE -> new ChannelDeleteEvent(seq, eventId, data, payload(data, Channel.class));
+                case C2cMessageCreateEvent.TYPE -> new C2cMessageCreateEvent(seq, eventId, data, payload(data, C2cMessage.class));
+                case GroupAtMessageCreateEvent.TYPE -> new GroupAtMessageCreateEvent(seq, eventId, data, payload(data, GroupMessage.class));
+                case GroupMessageCreateEvent.TYPE -> new GroupMessageCreateEvent(seq, eventId, data, payload(data, GroupMessage.class));
+                case FriendAddEvent.TYPE -> new FriendAddEvent(seq, eventId, data, payload(data, FriendAdd.class));
+                case FriendDelEvent.TYPE -> new FriendDelEvent(seq, eventId, data, payload(data, FriendDel.class));
+                case C2cMsgRejectEvent.TYPE -> new C2cMsgRejectEvent(seq, eventId, data, payload(data, C2cMsgReject.class));
+                case C2cMsgReceiveEvent.TYPE -> new C2cMsgReceiveEvent(seq, eventId, data, payload(data, C2cMsgReceive.class));
+                case GroupAddRobotEvent.TYPE -> new GroupAddRobotEvent(seq, eventId, data, payload(data, GroupAddRobot.class));
+                case GroupDelRobotEvent.TYPE -> new GroupDelRobotEvent(seq, eventId, data, payload(data, GroupDelRobot.class));
+                case GroupMsgRejectEvent.TYPE -> new GroupMsgRejectEvent(seq, eventId, data, payload(data, GroupMsgReject.class));
+                case GroupMsgReceiveEvent.TYPE -> new GroupMsgReceiveEvent(seq, eventId, data, payload(data, GroupMsgReceive.class));
+                case InteractionCreateEvent.TYPE -> new InteractionCreateEvent(seq, eventId, data, payload(data, InteractionCreate.class));
+                case AtMessageCreateEvent.TYPE -> new AtMessageCreateEvent(seq, eventId, data, payload(data, ChannelMessage.class));
+                case MessageCreateEvent.TYPE -> new MessageCreateEvent(seq, eventId, data, payload(data, ChannelMessage.class));
+                case DirectMessageCreateEvent.TYPE -> new DirectMessageCreateEvent(seq, eventId, data, payload(data, ChannelMessage.class));
+                case MessageAuditPassEvent.TYPE -> new MessageAuditPassEvent(seq, eventId, data, payload(data, MessageAudited.class));
+                case MessageAuditRejectEvent.TYPE -> new MessageAuditRejectEvent(seq, eventId, data, payload(data, MessageAudited.class));
                 default -> null;
             };
         } catch (JacksonException e) {

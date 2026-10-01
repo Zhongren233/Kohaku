@@ -15,8 +15,8 @@ public final class ChannelDeleteEvent extends BotDispatchEvent {
 
     private final Channel payload;
 
-    public ChannelDeleteEvent(long seq, JsonNode raw, Channel payload) {
-        super(seq, TYPE, raw);
+    public ChannelDeleteEvent(long seq, String eventId, JsonNode raw, Channel payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

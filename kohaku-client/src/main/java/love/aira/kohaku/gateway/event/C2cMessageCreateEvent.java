@@ -15,8 +15,8 @@ public final class C2cMessageCreateEvent extends BotDispatchEvent {
 
     private final C2cMessage payload;
 
-    public C2cMessageCreateEvent(long seq, JsonNode raw, C2cMessage payload) {
-        super(seq, TYPE, raw);
+    public C2cMessageCreateEvent(long seq, String eventId, JsonNode raw, C2cMessage payload) {
+        super(seq, TYPE, eventId, raw);
         this.payload = payload;
     }
 

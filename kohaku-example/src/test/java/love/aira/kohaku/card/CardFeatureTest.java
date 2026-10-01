@@ -46,8 +46,13 @@ class CardFeatureTest {
                 .contains("C-001").contains("C-005")
                 .doesNotContain("C-006");
         assertThat(buttonIds(request)).containsExactly("page", "next");
-        assertThat(buttonData(request, 1)).isEqualTo("/card next 2");
-        assertThat(buttonType(request, 1)).isEqualTo(2);   // 指令按钮：点击即发一条命令消息
+        if (CardFeature.USE_INTERACTION_BUTTONS) {
+            assertThat(buttonData(request, 1)).isEqualTo("card:next:p=2");   // 回调按钮：平台下发互动事件
+            assertThat(buttonType(request, 1)).isEqualTo(1);
+        } else {
+            assertThat(buttonData(request, 1)).isEqualTo("/card next 2");    // 指令按钮：点击即发一条命令消息
+            assertThat(buttonType(request, 1)).isEqualTo(2);
+        }
     }
 
     @Test
@@ -55,7 +60,7 @@ class CardFeatureTest {
         SendMessageRequest last = CardFeature.page(3);
         assertThat(last.markdown().content()).contains("卡片列表 3/3").contains("C-011").contains("C-012");
         assertThat(buttonIds(last)).containsExactly("prev", "page");
-        assertThat(buttonData(last, 0)).isEqualTo("/card prev 2");
+        assertThat(buttonData(last, 0)).isEqualTo(CardFeature.USE_INTERACTION_BUTTONS ? "card:prev:p=2" : "/card prev 2");
 
         assertThat(CardFeature.page(99).markdown().content()).contains("卡片列表 3/3");   // 越界页码被夹回
     }
@@ -90,7 +95,7 @@ class CardFeatureTest {
 
         SendMessageRequest sent = captureSentToUser();
         assertThat(sent.markdown().content()).contains("卡片列表 2/3").contains("C-006").contains("C-010");
-        assertThat(sent.eventId()).isEqualTo("EVENT_ID");      // 用互动事件 id 被动回复
+        assertThat(sent.eventId()).isEqualTo("INTERACTION_CREATE:EVENT_ID");   // 用「最外层」事件 id 被动回复
         assertThat(sent.msgSeq()).isNull();
         assertThat(buttonIds(sent)).containsExactly("prev", "page", "next");   // 第二页前后都有
     }
@@ -162,7 +167,7 @@ class CardFeatureTest {
         MessageAuthor author = new MessageAuthor("id", "nick", false, null, null, null, "USER_OPENID", null, null);
         C2cMessage message = new C2cMessage("MSG_1", author, content, "2026-10-02T00:00:00+08:00", 0, null, null, null,
                 null);
-        return new C2cMessageCreateEvent(1, new JsonMapper().readTree("{}"), message);
+        return new C2cMessageCreateEvent(1, "C2C_MESSAGE_CREATE:EVENT_ID", new JsonMapper().readTree("{}"), message);
     }
 
     private static ButtonContext context(String buttonData, Map<String, String> state) {
@@ -170,7 +175,7 @@ class CardFeatureTest {
                 null, null);
         InteractionCreate payload = new InteractionCreate("EVENT_ID", 11, "c2c", 2, "2026-10-02T00:00:00+08:00",
                 null, null, "USER_OPENID", null, null, new InteractionData(11, resolved), 1, "102012345");
-        InteractionCreateEvent event = new InteractionCreateEvent(1, new JsonMapper().readTree("{}"), payload);
+        InteractionCreateEvent event = new InteractionCreateEvent(1, "INTERACTION_CREATE:EVENT_ID", new JsonMapper().readTree("{}"), payload);
         return new ButtonContext(event, "card", "next", state, "btn-1", buttonData, 2, "c2c", "USER_OPENID", null, null);
     }
 }

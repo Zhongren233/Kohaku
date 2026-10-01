@@ -131,7 +131,7 @@ class KohakuEventDispatchTest {
                 null, null);
         InteractionCreate payload = new InteractionCreate("EVENT_ID", 11, "c2c", 2, "2026-10-02T00:00:00+08:00",
                 null, null, "USER_OPENID", null, null, new InteractionData(11, resolved), 1, "102012345");
-        return new InteractionCreateEvent(1, new JsonMapper().readTree("{}"), payload);
+        return new InteractionCreateEvent(1, "INTERACTION_CREATE:EVENT_ID", new JsonMapper().readTree("{}"), payload);
     }
 
     /** 被测功能：只注册一个 next 动作。 */
@@ -169,7 +169,7 @@ class KohakuEventDispatchTest {
     }
 
     private static C2cMessageCreateEvent c2c() {
-        return new C2cMessageCreateEvent(1, new JsonMapper().readTree("{}"),
+        return new C2cMessageCreateEvent(1, "C2C_MESSAGE_CREATE:ID", new JsonMapper().readTree("{}"),
                 new C2cMessage("m1", null, "hi", null, 0, null, null, null, null));
     }
 

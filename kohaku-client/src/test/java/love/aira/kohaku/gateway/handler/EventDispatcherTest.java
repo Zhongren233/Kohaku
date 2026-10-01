@@ -19,12 +19,12 @@ class EventDispatcherTest {
     private final List<BotEvent> fallback = new ArrayList<>();
 
     private static C2cMessageCreateEvent c2c() {
-        return new C2cMessageCreateEvent(1, new JsonMapper().readTree("{}"),
+        return new C2cMessageCreateEvent(1, "C2C_MESSAGE_CREATE:ID", new JsonMapper().readTree("{}"),
                 new C2cMessage("m1", null, "hi", null, 0, null, null, null, null));
     }
 
     private static GroupAtMessageCreateEvent group() {
-        return new GroupAtMessageCreateEvent(2, new JsonMapper().readTree("{}"),
+        return new GroupAtMessageCreateEvent(2, "GROUP_AT_MESSAGE_CREATE:ID", new JsonMapper().readTree("{}"),
                 new GroupMessage("m2", null, "hi", "G1", null, 0, null, null, null, null, null));
     }
 
