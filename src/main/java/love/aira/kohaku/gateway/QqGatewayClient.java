@@ -16,6 +16,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
+import love.aira.kohaku.api.AccessTokenProvider;
+import love.aira.kohaku.api.QqGatewayApi;
 import love.aira.kohaku.config.QqBotProperties;
 import love.aira.kohaku.gateway.event.BotDispatchEvent;
 import love.aira.kohaku.gateway.event.BotEvent;
@@ -63,7 +65,8 @@ public class QqGatewayClient implements SmartLifecycle {
     private static final Pattern AUTH_TOKEN = Pattern.compile("(\"token\"\\s*:\\s*\")[^\"]*(\")");
 
     private final QqBotProperties properties;
-    private final QqApiClient api;
+    private final QqGatewayApi gatewayApi;
+    private final AccessTokenProvider tokens;
     private final ObjectMapper mapper;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -85,10 +88,11 @@ public class QqGatewayClient implements SmartLifecycle {
     private long heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
     private int reconnectAttempt;
 
-    public QqGatewayClient(QqBotProperties properties, QqApiClient api, ObjectMapper mapper,
-                           ApplicationEventPublisher eventPublisher) {
+    public QqGatewayClient(QqBotProperties properties, QqGatewayApi gatewayApi, AccessTokenProvider tokens,
+                           ObjectMapper mapper, ApplicationEventPublisher eventPublisher) {
         this.properties = properties;
-        this.api = api;
+        this.gatewayApi = gatewayApi;
+        this.tokens = tokens;
         this.mapper = mapper;
         this.eventPublisher = eventPublisher;
     }
@@ -161,7 +165,7 @@ public class QqGatewayClient implements SmartLifecycle {
         }
         try {
             if (url == null) {
-                url = api.gatewayUrl();
+                url = gatewayApi.url();
                 synchronized (lock) {
                     gatewayUrl = url;
                 }
@@ -442,7 +446,7 @@ public class QqGatewayClient implements SmartLifecycle {
 
     private ObjectNode authPayload(Connection connection) {
         ObjectNode data = mapper.createObjectNode();
-        data.put("token", api.authorization());
+        data.put("token", tokens.authorization());
         if (connection.resume) {
             data.put("session_id", sessionId);
             data.put("seq", lastSeq);
