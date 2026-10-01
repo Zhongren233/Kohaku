@@ -2,9 +2,11 @@ spring:
   application:
     name: kohaku
   config:
-    # 私有凭据不落库：默认放本地 secrets/qq-bot.yaml（已 gitignore），
-    # 部署时用环境变量 KOHAKU_QQ_APPID / KOHAKU_QQ_APPSECRET 覆盖。
-    import: optional:file:./secrets/qq-bot.yaml
+    # 私有凭据不落库（secrets/ 已 gitignore），可用环境变量 KOHAKU_QQ_APPID / KOHAKU_QQ_APPSECRET 覆盖。
+    # file: 相对路径按「进程工作目录」解析，这里把两种常见工作目录都列上：
+    import:
+      - optional:file:./secrets/qq-bot.yaml                 # 工作目录 = kohaku-example/
+      - optional:file:./kohaku-example/secrets/qq-bot.yaml  # 工作目录 = 仓库根
 
 kohaku:
   qq:

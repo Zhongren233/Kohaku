@@ -24,7 +24,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param reconnectInitialDelay  重连退避起始延迟
  * @param reconnectMaxDelay      重连退避上限
  * @param enabled                是否启用本 starter（置 false 可整体关闭，连凭据校验也跳过）
- * @param sandbox                是否为沙箱环境；为 true 时强制使用 {@link #SANDBOX_API_BASE_URL}
+ * @param sandbox                是否为沙箱环境；为 true 时强制使用 {@link KohakuConfig#SANDBOX_API_BASE_URL}
  */
 @ConfigurationProperties(prefix = "kohaku.qq")
 public record QqBotProperties(
@@ -42,17 +42,21 @@ public record QqBotProperties(
         @DefaultValue("true") boolean enabled,
         @DefaultValue("false") boolean sandbox) {
 
-    /** 沙箱环境的开放平台地址。 */
-    public static final String SANDBOX_API_BASE_URL = "https://sandbox.api.sgroup.qq.com";
+    /**
+     * 缺凭据时的补充提示：{@code spring.config.import} 的 file: 相对路径按进程工作目录解析，
+     * 带上当前目录便于定位「配置没被读到」这类问题。
+     */
+    private static final String MISSING_HINT = "（当前工作目录 "
+            + System.getProperty("user.dir") + "，spring.config.import 中 file: 的相对路径即以此为基准）";
 
     public QqBotProperties {
         if (appId == null || appId.isBlank()) {
-            throw new IllegalArgumentException("kohaku.qq.app-id is missing: 在配置文件中填写，"
-                    + "或设置环境变量 KOHAKU_QQ_APPID");
+            throw new IllegalArgumentException("kohaku.qq.app-id is missing: 在配置文件中填写，或设置环境变量 "
+                    + "KOHAKU_QQ_APPID" + MISSING_HINT);
         }
         if (appSecret == null || appSecret.isBlank()) {
-            throw new IllegalArgumentException("kohaku.qq.app-secret is missing: 在配置文件中填写，"
-                    + "或设置环境变量 KOHAKU_QQ_APPSECRET");
+            throw new IllegalArgumentException("kohaku.qq.app-secret is missing: 在配置文件中填写，或设置环境变量 "
+                    + "KOHAKU_QQ_APPSECRET" + MISSING_HINT);
         }
         if (intents == null || intents.isEmpty()) {
             throw new IllegalArgumentException(
