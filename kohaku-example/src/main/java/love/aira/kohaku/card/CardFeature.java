@@ -9,9 +9,8 @@ import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.feature.BotFeature;
 import love.aira.kohaku.feature.ButtonContext;
 import love.aira.kohaku.feature.ButtonHandler;
-import love.aira.kohaku.feature.FeatureKeyboards;
 import love.aira.kohaku.feature.InteractionReplies;
-import love.aira.kohaku.feature.Pagination;
+import love.aira.kohaku.support.Pagination;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
@@ -37,9 +36,6 @@ public class CardFeature implements BotFeature {
     public static final String COMMAND = "/card";
     /** 是否用回调按钮（需开放平台开通「互动事件」权限）；false 时用指令按钮，仅依赖消息链路。 */
     public static final boolean USE_INTERACTION_BUTTONS = true;
-    public static final String ACTION_NEXT = FeatureKeyboards.ACTION_NEXT;
-    public static final String ACTION_PREV = FeatureKeyboards.ACTION_PREV;
-    public static final String ACTION_PAGE = FeatureKeyboards.ACTION_PAGE;
     static final int PAGE_SIZE = 5;
 
     record Card(String id, String title, String summary) {
@@ -89,28 +85,8 @@ public class CardFeature implements BotFeature {
         markdown.append("\n> 点击下方按钮翻页");
         return SendMessageRequest.markdown(markdown.toString())
                 .withKeyboard(USE_INTERACTION_BUTTONS
-                        ? FeatureKeyboards.pagination(ID, pagination, Map.of())
-                        : commandPagination(pagination));
-    }
-
-    /** 指令式翻页键盘：data 形如 {@code /card next 2}，点击后作为普通消息回到本功能的命令入口。 */
-    private static Keyboard commandPagination(Pagination pagination) {
-        List<Keyboard.Button> buttons = new ArrayList<>(3);
-        if (pagination.hasPrevious()) {
-            buttons.add(FeatureKeyboards.commandButton("prev", "上一页",
-                    command(ACTION_PREV, pagination.page() - 1)));
-        }
-        buttons.add(FeatureKeyboards.commandButton("page", pagination.label(),
-                command(ACTION_PAGE, pagination.page())));
-        if (pagination.hasNext()) {
-            buttons.add(FeatureKeyboards.commandButton("next", "下一页",
-                    command(ACTION_NEXT, pagination.page() + 1)));
-        }
-        return Keyboard.of(Keyboard.Row.of(buttons.toArray(Keyboard.Button[]::new)));
-    }
-
-    private static String command(String action, int page) {
-        return COMMAND + " " + action + " " + page;
+                        ? CardKeyboards.callbackPagination(ID, pagination, Map.of())
+                        : CardKeyboards.commandPagination(ID, pagination));
     }
 
     @Override
@@ -120,12 +96,12 @@ public class CardFeature implements BotFeature {
 
     @Override
     public List<ButtonHandler> buttonHandlers() {
-        return List.of(step(FeatureKeyboards.ACTION_NEXT), step(FeatureKeyboards.ACTION_PREV),
-                step(FeatureKeyboards.ACTION_PAGE));
+        return List.of(step(CardKeyboards.ACTION_NEXT), step(CardKeyboards.ACTION_PREV),
+                step(CardKeyboards.ACTION_PAGE));
     }
 
     /**
-     * 翻页按钮：按钮 data 里携带的是**目标页码**（`FeatureKeyboards.pagination` 已算好，
+     * 翻页按钮：按钮 data 里携带的是**目标页码**（`CardKeyboards` 已算好，
      * 指令按钮 `/card next 2` 同理），这里直接渲染目标页，不再做加减 —— 这样重复点击/重放也是幂等的。
      */
     private ButtonHandler step(String action) {
@@ -137,7 +113,7 @@ public class CardFeature implements BotFeature {
 
             @Override
             public HandlerResult onButton(ButtonContext context) {
-                int target = context.intState(FeatureKeyboards.STATE_PAGE, 1);
+                int target = context.intState(CardKeyboards.STATE_PAGE, 1);
                 log.info("card 翻页 action={} target={} scene={} chat={}", action, target, context.scene(),
                         context.userOpenid() != null ? context.userOpenid() : context.groupOpenid());
                 InteractionReplies.reply(messages, context, page(target));
@@ -202,7 +178,8 @@ public class CardFeature implements BotFeature {
         if (parts.length == 2) {
             return parsePage(parts[1]);                       // /card 3
         }
-        if (!ACTION_NEXT.equals(parts[1]) && !ACTION_PREV.equals(parts[1]) && !ACTION_PAGE.equals(parts[1])) {
+        if (!CardKeyboards.ACTION_NEXT.equals(parts[1]) && !CardKeyboards.ACTION_PREV.equals(parts[1])
+                && !CardKeyboards.ACTION_PAGE.equals(parts[1])) {
             return 0;
         }
         return parsePage(parts[2]);                            // /card next 2（指令按钮点击后的形态）

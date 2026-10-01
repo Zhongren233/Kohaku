@@ -1,4 +1,4 @@
-package love.aira.kohaku.feature;
+package love.aira.kohaku.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

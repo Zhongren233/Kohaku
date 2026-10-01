@@ -199,8 +199,10 @@ public class CardFeature implements BotFeature {
 因此翻页不会落到别的 handler。
 
 - **状态放在 data 里（方案 A）**：机器人侧无状态、跨重启可用；状态过大时应改用「token + 服务端会话表」。
-- 助手：`FeatureKeyboards.pagination(featureId, pagination, state)` 生成 上一页/页码/下一页；
-  `Pagination.of(page, size, total)` 负责页码夹取与切片。
+- 客户端库只提供**协议级**原语：`FeatureKeyboards.button(...)`（回调按钮，data 编码 `featureId:action:状态`）、
+  `FeatureKeyboards.commandButton(...)`（指令按钮）、`ButtonData`（路由键编解码）、
+  `InteractionRouter`（路由 + 应答）；**分页这类业务形态属于应用层**，见 `kohaku-example` 的
+  `CardKeyboards`（翻页键盘）与 `support.Pagination`（页码夹取与切片），可作为你自己功能的模板。
 两种按钮写法，按机器人是否开通「互动事件」权限选择：
 
 | 模式 | 写法 | 点击后的链路 | 前置条件 |

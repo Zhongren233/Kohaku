@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import love.aira.kohaku.api.model.Keyboard;
@@ -72,15 +73,14 @@ class InteractionRouterTest {
 
     @Test
     void generatedKeyboardDataRoutesBackToTheSameHandler() {
-        Keyboard keyboard = FeatureKeyboards.pagination("card", Pagination.of(1, 5, 12), null);
-        List<Keyboard.Button> buttons = keyboard.content().rows().getFirst().buttons();
+        Keyboard.Button next = FeatureKeyboards.button("next", "card", "next", "下一页", Map.of("p", "2"));
 
-        assertThat(buttons).extracting(Keyboard.Button::id).containsExactly("page", "next");
-        assertThat(buttons.get(1).renderData().label()).isEqualTo("下一页");
-        // 直接拿生成出来的 data 去路由，应命中同一个功能
-        assertThat(router.handle(click(buttons.get(1).action().data(), 11, 2, "USER", null)))
+        assertThat(next.action().data()).isEqualTo("card:next:p=2");
+        assertThat(next.renderData().label()).isEqualTo("下一页");
+        // 直接拿生成的 data 去路由，应命中同一个功能（编码与路由保持闭环）
+        assertThat(router.handle(click(next.action().data(), 11, 2, "USER", null)))
                 .isEqualTo(HandlerResult.CONSUMED);
-        assertThat(card.handled.getFirst().intState(FeatureKeyboards.STATE_PAGE, 1)).isEqualTo(2);
+        assertThat(card.handled.getFirst().intState("p", 1)).isEqualTo(2);
     }
 
     @Test
@@ -259,7 +259,7 @@ class InteractionRouterTest {
             return List.of(new ButtonHandler() {
                 @Override
                 public String action() {
-                    return FeatureKeyboards.ACTION_NEXT;
+                    return "next";
                 }
 
                 @Override
