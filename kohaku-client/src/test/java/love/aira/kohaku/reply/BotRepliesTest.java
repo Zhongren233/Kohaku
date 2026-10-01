@@ -3,6 +3,10 @@ package love.aira.kohaku.reply;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
@@ -30,6 +34,7 @@ import love.aira.kohaku.gateway.event.model.MessageAuthor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -45,6 +50,7 @@ class BotRepliesTest {
 
     private FakeQqApiServer server;
     private JsonMapper mapper;
+    private ListAppender<ILoggingEvent> logs;
     private BotReplies replies;
     private BotReplies withoutChannelApi;
 
@@ -60,11 +66,40 @@ class BotRepliesTest {
         QqOpenApiClient client = new QqOpenApiClient(HttpClient.newHttpClient(), mapper, config, tokens);
         replies = new BotReplies(new QqMessageApi(client), new QqChannelMessageApi(client));
         withoutChannelApi = new BotReplies(new QqMessageApi(client));
+
+        logs = new ListAppender<>();
+        logs.start();
+        ((Logger) LoggerFactory.getLogger(BotReplies.class)).addAppender(logs);
     }
 
     @AfterEach
     void tearDown() {
+        ((Logger) LoggerFactory.getLogger(BotReplies.class)).detachAppender(logs);
         server.close();
+    }
+
+    /** 平台限制前的预警（第 4 次用满、第 5 次超限都要 WARN，但不阻断发送）。 */
+    @Test
+    void warnsBeforePlatformRejectsAndStillSends() {
+        for (int i = 0; i < 5; i++) {
+            server.stub("POST /v2/users/OPENID_USER/messages", 200, SENT);
+        }
+
+        C2cMessageCreateEvent event = c2c("MSG_1");
+        for (int i = 1; i <= 5; i++) {
+            replies.text(event, "第 " + i + " 次");
+        }
+
+        assertThat(server.calls("POST /v2/users/OPENID_USER/messages")).hasSize(5);   // 告警不阻断
+        assertThat(warnings()).anySatisfy(warning -> assertThat(warning).contains("已用满").contains("4 次"));
+        assertThat(warnings()).anySatisfy(warning -> assertThat(warning).contains("超过平台上限"));
+    }
+
+    private List<String> warnings() {
+        return logs.list.stream()
+                .filter(event -> event.getLevel() == Level.WARN)
+                .map(ILoggingEvent::getFormattedMessage)
+                .toList();
     }
 
     @Test

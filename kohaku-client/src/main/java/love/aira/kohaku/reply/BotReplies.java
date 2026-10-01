@@ -1,8 +1,6 @@
 package love.aira.kohaku.reply;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.time.Clock;
 import love.aira.kohaku.api.QqChannelMessageApi;
 import love.aira.kohaku.api.QqMessageApi;
 import love.aira.kohaku.api.model.ChannelMessageRequest;
@@ -21,6 +19,9 @@ import love.aira.kohaku.gateway.event.MessageCreateEvent;
 import love.aira.kohaku.gateway.event.model.C2cMessage;
 import love.aira.kohaku.gateway.event.model.GroupMessage;
 import love.aira.kohaku.gateway.event.model.InteractionCreate;
+import love.aira.kohaku.reply.PassiveBudget.Scene;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 统一的被动回复入口：从**入站事件**自动解析目标与被动标记，业务侧不再自己拼 openid、不再手管 msg_seq。
@@ -45,19 +46,13 @@ import love.aira.kohaku.gateway.event.model.InteractionCreate;
  */
 public class BotReplies {
 
-    /** 单聊一条消息最多回复 4 次、群聊 5 次；这里用 LRU 记录 msg_id → 已用序号。 */
-    private static final int MAX_TRACKED_SEQUENCES = 4096;
+    private static final Logger log = LoggerFactory.getLogger(BotReplies.class);
 
     private final QqMessageApi messages;
     private final QqChannelMessageApi channelMessages;
 
-    private final Map<String, Integer> sequences = Collections.synchronizedMap(
-            new LinkedHashMap<>(64, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, Integer> eldest) {
-                    return size() > MAX_TRACKED_SEQUENCES;
-                }
-            });
+    /** 被动回复的窗口/次数记账：撞上平台限制之前先告警（平台只会直接拒绝）。 */
+    private final PassiveBudget budget = new PassiveBudget(Clock.systemUTC());
 
     /** 只回复单聊/群聊时使用。 */
     public BotReplies(QqMessageApi messages) {
@@ -90,15 +85,18 @@ public class BotReplies {
         return switch (event) {
             case C2cMessageCreateEvent c2c -> {
                 C2cMessage message = c2c.payload();
-                yield messages.sendToUser(message.author().userOpenid(), passiveMessage(request, message.id()));
+                yield messages.sendToUser(message.author().userOpenid(),
+                        passiveMessage(request, message.id(), Scene.C2C));
             }
             case GroupAtMessageCreateEvent group -> {
                 GroupMessage message = group.payload();
-                yield messages.sendToGroup(message.groupOpenid(), passiveMessage(request, message.id()));
+                yield messages.sendToGroup(message.groupOpenid(),
+                        passiveMessage(request, message.id(), Scene.GROUP));
             }
             case GroupMessageCreateEvent group -> {
                 GroupMessage message = group.payload();
-                yield messages.sendToGroup(message.groupOpenid(), passiveMessage(request, message.id()));
+                yield messages.sendToGroup(message.groupOpenid(),
+                        passiveMessage(request, message.id(), Scene.GROUP));
             }
             case InteractionCreateEvent interaction -> {
                 InteractionCreate payload = interaction.payload();
@@ -142,11 +140,17 @@ public class BotReplies {
         return channelMessages;
     }
 
-    /** 消息事件的被动标记：{@code msg_id + 自增 msg_seq}；调用方已指定则不覆盖。 */
-    private SendMessageRequest passiveMessage(SendMessageRequest request, String messageId) {
-        return request.msgId() != null || request.eventId() != null
-                ? request
-                : request.replyingTo(messageId, nextSequence(messageId));
+    /**
+     * 消息事件的被动标记：{@code msg_id + 自增 msg_seq}；调用方已指定则不覆盖。
+     * 顺带按平台限制（窗口/次数）提前告警。
+     */
+    private SendMessageRequest passiveMessage(SendMessageRequest request, String messageId, Scene scene) {
+        if (request.msgId() != null || request.eventId() != null) {
+            return request;
+        }
+        PassiveBudget.Usage usage = budget.record(messageId, scene);
+        warn(messageId, usage);
+        return request.replyingTo(messageId, usage.sequence());
     }
 
     /** 互动事件的被动标记：最外层事件 id 作 {@code event_id}；调用方已指定则不覆盖。 */
@@ -155,14 +159,21 @@ public class BotReplies {
     }
 
     private ChannelMessageRequest passiveChannel(ChannelMessageRequest request, String messageId) {
-        return request.msgId() != null || request.eventId() != null ? request : request.replyingTo(messageId);
+        if (request.msgId() != null || request.eventId() != null) {
+            return request;
+        }
+        warn(messageId, budget.record(messageId, Scene.GUILD));   // 频道无 msg_seq，只查窗口
+        return request.replyingTo(messageId);
+    }
+
+    private void warn(String messageId, PassiveBudget.Usage usage) {
+        if (usage.warning() != null) {
+            log.warn("{}（msg_id={}）", usage.warning(), messageId);
+        }
     }
 
     private ChannelMessageRequest passiveChannelEvent(ChannelMessageRequest request, String eventId) {
         return request.msgId() != null || request.eventId() != null ? request : request.replyingToEvent(eventId);
     }
 
-    private int nextSequence(String messageId) {
-        return sequences.merge(messageId, 1, Integer::sum);
-    }
 }

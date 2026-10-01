@@ -61,6 +61,10 @@ replies.sendToChannel(event, ChannelMessageRequest.text("hi"));   // 频道 / �
 自动处理：单聊/群聊的目标 openid、`msg_id + msg_seq`（**自动递增**，避免"相同 msg_id+msg_seq"报错）、
 互动事件的**最外层** `event_id`；调用方已指定被动标记时不覆盖；不支持回复的事件直接抛 `IllegalArgumentException`。
 
+**撞限制之前先告警**：按 `msg_id` 记录「首次回复时间 + 已回复次数」，在**用满**（单聊第 4 次 / 群聊第 5 次）、
+**超限**、**窗口过期**（单聊 60 分钟 / 群聊 5 分钟 / 频道 5 分钟）时打 WARN——平台只会直接拒绝、
+且报错不会告诉你还差几次。告警**不阻断**发送（平台仍是唯一裁定者）。
+
 引入即连接；可直接注入 `QqMessageApi`、`QqMediaApi`、`QqChannelMessageApi`、`QqGatewayClient`、
 `QqOpenApiClient`、`AccessTokenProvider`、`BotReplies`。这些 Bean 都带 `@ConditionalOnMissingBean`，可自行覆写。
 
