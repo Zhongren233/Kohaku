@@ -130,6 +130,19 @@ public final class FakeQqPlatform {
             send(latestSession(), dispatch(type, eventSeq, mapper.createObjectNode()));
         }
 
+        /** 推送一条真实的 AT_MESSAGE_CREATE（频道内 @机器人），用于验证强类型事件反序列化。 */
+        public void pushAtMessage(String content, int eventSeq) throws IOException {
+            ObjectNode data = mapper.createObjectNode();
+            data.put("id", "MSG_" + eventSeq);
+            data.put("channel_id", "CH_1");
+            data.put("guild_id", "GUILD_1");
+            data.put("content", content);
+            data.put("timestamp", "2026-10-02T00:00:00+08:00");
+            data.put("seq", eventSeq);
+            data.putObject("author").put("id", "USER_1").put("username", "tester").put("bot", false);
+            send(latestSession(), dispatch("AT_MESSAGE_CREATE", eventSeq, data));
+        }
+
         /** 下发 OpCode 7，要求客户端重连。 */
         public void pushReconnect() throws IOException {
             ObjectNode payload = mapper.createObjectNode();

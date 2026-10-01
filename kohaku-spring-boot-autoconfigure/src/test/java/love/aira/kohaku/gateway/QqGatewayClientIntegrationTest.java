@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
 import kohaku.fixture.FakeQqPlatform;
+import love.aira.kohaku.gateway.event.AtMessageCreateEvent;
 import love.aira.kohaku.gateway.event.BotDispatchEvent;
 import love.aira.kohaku.gateway.event.BotReadyEvent;
 import love.aira.kohaku.gateway.event.BotResumedEvent;
@@ -70,10 +71,17 @@ class QqGatewayClientIntegrationTest {
         assertThat(identify.path("d").path("shard").get(0).asInt()).isZero();
         assertThat(identify.path("d").path("shard").get(1).asInt()).isEqualTo(1);
 
-        // 2. 事件序号推进后，心跳必须携带最新的 s
-        gateway.pushEvent("AT_MESSAGE_CREATE", 42);
+        // 2. 事件序号推进后，心跳必须携带最新的 s；同时事件应被反序列化为强类型
+        gateway.pushAtMessage("你好 kohaku", 42);
         await().atMost(TIMEOUT).untilAsserted(() -> assertThat(recorder.ofType(BotDispatchEvent.class))
                 .anySatisfy(event -> assertThat(event.seq()).isEqualTo(42)));
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(recorder.ofType(AtMessageCreateEvent.class)).hasSize(1));
+        AtMessageCreateEvent message = recorder.last(AtMessageCreateEvent.class);
+        assertThat(message.seq()).isEqualTo(42);
+        assertThat(message.payload().content()).isEqualTo("你好 kohaku");
+        assertThat(message.payload().channelId()).isEqualTo("CH_1");
+        assertThat(message.payload().guildId()).isEqualTo("GUILD_1");
+        assertThat(message.payload().author().username()).isEqualTo("tester");
         await().atMost(TIMEOUT).untilAsserted(() -> assertThat(gateway.heartbeatSeqs()).contains(42L));
 
         // 3. 连接过期（4009）：保留 session 并补发遗漏事件

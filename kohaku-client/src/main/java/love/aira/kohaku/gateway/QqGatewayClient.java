@@ -68,6 +68,7 @@ public class QqGatewayClient {
     private final AccessTokenProvider tokens;
     private final ObjectMapper mapper;
     private final Consumer<BotEvent> listener;
+    private final GatewayEventDecoder eventDecoder;
 
     private final Object lock = new Object();
 
@@ -94,6 +95,7 @@ public class QqGatewayClient {
         this.tokens = tokens;
         this.mapper = mapper;
         this.listener = listener;
+        this.eventDecoder = new GatewayEventDecoder(mapper);
     }
 
     public void start() {
@@ -331,7 +333,10 @@ public class QqGatewayClient {
                 log.info("gateway RESUMED, missed events have been replayed");
                 publish(new BotResumedEvent(seq));
             }
-            default -> publish(new BotDispatchEvent(seq, type, data));
+            default -> {
+                BotDispatchEvent typed = eventDecoder.decode(seq, type, data);
+                publish(typed != null ? typed : new BotDispatchEvent(seq, type, data));
+            }
         }
     }
 

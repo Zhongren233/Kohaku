@@ -16,10 +16,10 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import love.aira.kohaku.config.KohakuConfig;
+import love.aira.kohaku.support.SnakeCaseMappers;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.PropertyNamingStrategies;
 
 /**
  * 开放平台 REST 调用器：统一拼接 base url、注入 {@code Authorization}、解析 JSON、
@@ -39,10 +39,8 @@ public class QqOpenApiClient {
     public QqOpenApiClient(HttpClient qqHttpClient, ObjectMapper mapper, KohakuConfig config,
                            AccessTokenProvider tokens) {
         this.httpClient = qqHttpClient;
-        // 平台字段是 snake_case：在共享 mapper 基础上派生专用实例，避免改动全局 JSON 配置
-        this.mapper = mapper.rebuild()
-                .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
-                .build();
+        // 平台字段是 snake_case：派生专用实例，避免改动宿主/全局 JSON 配置
+        this.mapper = SnakeCaseMappers.of(mapper);
         this.config = config;
         this.tokens = tokens;
     }

@@ -109,10 +109,39 @@ client.stop();       // 优雅停机
 
 消息接口同样可直接使用：`new QqMessageApi(api)`、`new QqMediaApi(api, http)`、`new QqChannelMessageApi(api)`。
 
+## 事件（强类型反序列化）
+
+官方文档定义的事件会被反序列化为**强类型事件**（继承自 `BotDispatchEvent`，原始报文仍可用 `data()` 取到），
+可直接按类型监听；未收录的事件仍以原始 `BotDispatchEvent` 回调。
+
+```java
+@EventListener
+void onMessage(C2cMessageCreateEvent event) {
+    String openid = event.payload().author().userOpenid();
+    String msgId  = event.payload().id();
+    String idx    = event.payload().messageScene().messageIndex();   // msg_idx，平台要求据此去重
+    messages.sendToUser(openid, SendMessageRequest.text("你好").replyingTo(msgId));
+}
+```
+
+| 分组 | 事件（23 个） |
+| --- | --- |
+| 单聊/群聊消息 | `C2C_MESSAGE_CREATE`、`GROUP_AT_MESSAGE_CREATE`、`GROUP_MESSAGE_CREATE` |
+| 好友与群生命周期 | `FRIEND_ADD`、`FRIEND_DEL`、`C2C_MSG_REJECT`、`C2C_MSG_RECEIVE`、`GROUP_ADD_ROBOT`、`GROUP_DEL_ROBOT`、`GROUP_MSG_REJECT`、`GROUP_MSG_RECEIVE` |
+| 频道/子频道 | `GUILD_CREATE/UPDATE/DELETE`、`CHANNEL_CREATE/UPDATE/DELETE` |
+| 频道消息与私信 | `AT_MESSAGE_CREATE`、`MESSAGE_CREATE`、`DIRECT_MESSAGE_CREATE` |
+| 消息审核 | `MESSAGE_AUDIT_PASS`、`MESSAGE_AUDIT_REJECT` |
+| 互动 | `INTERACTION_CREATE` |
+
+事件体模型位于 `love.aira.kohaku.gateway.event.model`：`MessageAuthor`、`MessageScene`、`MessageAttachment`、
+`ArkData`、`MsgElement`、`Member`、`MessageEmbed*`、`MessageArk*`、`InteractionResolved`、`AuthorizeData` 等。
+事件体与文档不符（字段类型异常）时会回落到原始事件并记 warning，不会打断长连接；
+未收录的事件类型可用 `GatewayEventDecoder#payload(JsonNode, Class)` 手动解析。
+
 ## 构建与验证
 
 ```bash
-./mvnw clean test                              # 66 例：核心(配置/编码/报文/关闭码) + 自动配置 + 假网关端到端 + 示例
+./mvnw clean test                              # 76 例：核心(事件反序列化/配置/编码/报文/关闭码) + 自动配置 + 假网关端到端 + 示例
 ./mvnw -DskipTests install                     # 安装本地坐标
 ./mvnw -pl kohaku-example spring-boot:run      # 用示例机器人真机连网关
 ```
