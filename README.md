@@ -7,8 +7,9 @@ QQ 机器人开放平台（QQ Bot）的 **Spring Boot 自动配置**：引入 st
 
 | 模块 | 说明 |
 | --- | --- |
-| `kohaku-spring-boot-autoconfigure` | 全部实现：网关长连接、开放平台 REST 客户端、自动配置 |
-| `kohaku-spring-boot-starter` | 依赖描述，业务方只引这一个 |
+| `kohaku-client` | **纯 Java 核心**：网关长连接、开放平台接口客户端、消息模型、事件；仅依赖 `jackson-databind` 与 `slf4j-api`，无任何 Spring |
+| `kohaku-spring-boot-autoconfigure` | Spring 装配：属性绑定、生命周期适配（`SmartLifecycle`）、事件转发、自动配置 |
+| `kohaku-spring-boot-starter` | 依赖描述，Spring 业务方只引这一个 |
 | `kohaku-example` | 可运行的示例机器人（私有凭据放在被 gitignore 的 `secrets/qq-bot.yaml`） |
 
 ## 快速开始
@@ -81,16 +82,44 @@ void onMessage(BotDispatchEvent event) {
 
 IDE 内补全由 `META-INF/spring-configuration-metadata.json` 提供。
 
+## 非 Spring 宿主（纯 Java）用法
+
+只引 `kohaku-client` 即可，classpath 里不需要任何 Spring：
+
+```xml
+<dependency>
+  <groupId>love.aira</groupId>
+  <artifactId>kohaku-client</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
+
+```java
+KohakuConfig config = KohakuConfig.of(appId, appSecret, List.of(QqIntent.GROUP_AND_C2C_EVENT));
+JsonMapper mapper = new JsonMapper();
+HttpClient http = HttpClient.newHttpClient();
+var tokens = new AccessTokenProvider(http, mapper, config);
+var api = new QqOpenApiClient(http, mapper, config, tokens);
+QqGatewayClient client = new QqGatewayClient(config, new QqGatewayApi(api, config), tokens, mapper,
+        event -> { if (event instanceof BotReadyEvent ready) { ... } });   // 事件回调
+client.start();      // 连接 + 心跳 + 自动重连/Resume
+...
+client.stop();       // 优雅停机
+```
+
+消息接口同样可直接使用：`new QqMessageApi(api)`、`new QqMediaApi(api, http)`、`new QqChannelMessageApi(api)`。
+
 ## 构建与验证
 
 ```bash
-./mvnw clean test                              # 61 例：自动配置条件、属性绑定、假网关端到端、报文断言、错误映射
+./mvnw clean test                              # 66 例：核心(配置/编码/报文/关闭码) + 自动配置 + 假网关端到端 + 示例
 ./mvnw -DskipTests install                     # 安装本地坐标
 ./mvnw -pl kohaku-example spring-boot:run      # 用示例机器人真机连网关
 ```
 
 真机已验证：网关 READY、心跳与 ACK、异常断开后 Resume；单聊与群聊的文本回复、Markdown+按钮、流式消息、
-富媒体分片上传并发送、撤回；以及一个包名无关的消费者项目（仅声明 starter）注入即连。
+富媒体分片上传并发送、撤回；Spring 消费者（仅声明 starter）注入即连；**纯 Java 消费者**
+（classpath 里 0 个 spring jar）同样连上网关。
 
 ## 环境要求
 

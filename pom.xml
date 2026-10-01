@@ -19,6 +19,7 @@
     </properties>
 
     <modules>
+        <module>kohaku-client</module>
         <module>kohaku-spring-boot-autoconfigure</module>
         <module>kohaku-spring-boot-starter</module>
         <module>kohaku-example</module>

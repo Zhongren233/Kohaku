@@ -16,6 +16,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>love.aira</groupId>
+            <artifactId>kohaku-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jackson</artifactId>
         </dependency>

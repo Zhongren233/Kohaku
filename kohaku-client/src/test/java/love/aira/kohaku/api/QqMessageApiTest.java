@@ -11,7 +11,7 @@ import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.api.model.SendMessageResponse;
 import love.aira.kohaku.api.model.StreamMessageRequest;
 import love.aira.kohaku.api.model.StreamMessageResponse;
-import love.aira.kohaku.config.QqBotProperties;
+import love.aira.kohaku.config.KohakuConfig;
 import love.aira.kohaku.config.QqIntent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,12 +31,12 @@ class QqMessageApiTest {
     void setUp() {
         server = new FakeQqApiServer();
         mapper = new JsonMapper();
-        QqBotProperties properties = new QqBotProperties("app-id", "app-secret", server.baseUrl(),
+        KohakuConfig config = new KohakuConfig("app-id", "app-secret", server.baseUrl(),
                 server.baseUrl() + "/app/getAppAccessToken", List.of(QqIntent.PUBLIC_GUILD_MESSAGES), 0, 1,
-                "kohaku", true, Duration.ofSeconds(1), Duration.ofSeconds(60), true, false);
+                "kohaku", true, Duration.ofSeconds(1), Duration.ofSeconds(60), false);
         server.stub("POST /app/getAppAccessToken", 200, TOKEN_BODY);
-        AccessTokenProvider tokens = new AccessTokenProvider(HttpClient.newHttpClient(), mapper, properties);
-        api = new QqMessageApi(new QqOpenApiClient(HttpClient.newHttpClient(), mapper, properties, tokens));
+        AccessTokenProvider tokens = new AccessTokenProvider(HttpClient.newHttpClient(), mapper, config);
+        api = new QqMessageApi(new QqOpenApiClient(HttpClient.newHttpClient(), mapper, config, tokens));
     }
 
     @AfterEach

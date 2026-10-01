@@ -11,7 +11,7 @@ import love.aira.kohaku.api.model.ChannelMessageRequest;
 import love.aira.kohaku.api.model.ChannelMessageResponse;
 import love.aira.kohaku.api.model.DmsSessionResponse;
 import love.aira.kohaku.api.model.MarkdownMessage;
-import love.aira.kohaku.config.QqBotProperties;
+import love.aira.kohaku.config.KohakuConfig;
 import love.aira.kohaku.config.QqIntent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,14 +35,14 @@ class QqChannelMessageApiTest {
     void setUp() {
         server = new FakeQqApiServer();
         mapper = new JsonMapper();
-        QqBotProperties properties = new QqBotProperties("app-id", "app-secret", server.baseUrl(),
+        KohakuConfig config = new KohakuConfig("app-id", "app-secret", server.baseUrl(),
                 server.baseUrl() + "/app/getAppAccessToken", List.of(QqIntent.GUILDS), 0, 1,
-                "kohaku", true, Duration.ofSeconds(1), Duration.ofSeconds(60), true, false);
+                "kohaku", true, Duration.ofSeconds(1), Duration.ofSeconds(60), false);
         server.stub("POST /app/getAppAccessToken", 200,
                 "{\"access_token\":\"test-token\",\"expires_in\":\"7200\"}");
         HttpClient httpClient = HttpClient.newHttpClient();
-        AccessTokenProvider tokens = new AccessTokenProvider(httpClient, mapper, properties);
-        api = new QqChannelMessageApi(new QqOpenApiClient(httpClient, mapper, properties, tokens));
+        AccessTokenProvider tokens = new AccessTokenProvider(httpClient, mapper, config);
+        api = new QqChannelMessageApi(new QqOpenApiClient(httpClient, mapper, config, tokens));
     }
 
     @AfterEach

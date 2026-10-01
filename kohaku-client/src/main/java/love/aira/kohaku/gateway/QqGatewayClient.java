@@ -15,10 +15,11 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import love.aira.kohaku.api.AccessTokenProvider;
 import love.aira.kohaku.api.QqGatewayApi;
-import love.aira.kohaku.config.QqBotProperties;
+import love.aira.kohaku.config.KohakuConfig;
 import love.aira.kohaku.gateway.event.BotDispatchEvent;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.BotReadyEvent;
@@ -26,8 +27,6 @@ import love.aira.kohaku.gateway.event.BotResumedEvent;
 import love.aira.kohaku.gateway.event.BotUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.SmartLifecycle;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -49,10 +48,12 @@ import tools.jackson.databind.node.ObjectNode;
  *   <li>不可重试的错误码（机器人封禁/下架、无效 opcode 等）直接停止。</li>
  * </ol>
  *
- * <p>所有网络回调由单线程执行器串行化，心跳由独立的单线程调度器驱动；事件以 Spring 事件发布，
- * 业务侧用 {@code @EventListener} 消费 {@link BotEvent}。
+ * <p>所有网络回调由单线程执行器串行化，心跳由独立的单线程调度器驱动；事件通过构造时传入的
+ * {@code Consumer<BotEvent>} 回调派发，因此本类不依赖任何框架：非 Spring 宿主直接 new 出来用即可，
+ * Spring 宿主由 {@code kohaku-spring-boot-autoconfigure} 把回调接到容器事件、
+ * 并用 {@code SmartLifecycle} 适配 {@link #start()} / {@link #stop()}。
  */
-public class QqGatewayClient implements SmartLifecycle {
+public class QqGatewayClient {
 
     private static final Logger log = LoggerFactory.getLogger(QqGatewayClient.class);
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(15);
@@ -62,11 +63,11 @@ public class QqGatewayClient implements SmartLifecycle {
     private static final long MAX_BACKOFF_SHIFT = 16;
     private static final Pattern AUTH_TOKEN = Pattern.compile("(\"token\"\\s*:\\s*\")[^\"]*(\")");
 
-    private final QqBotProperties properties;
+    private final KohakuConfig config;
     private final QqGatewayApi gatewayApi;
     private final AccessTokenProvider tokens;
     private final ObjectMapper mapper;
-    private final ApplicationEventPublisher eventPublisher;
+    private final Consumer<BotEvent> listener;
 
     private final Object lock = new Object();
 
@@ -86,16 +87,15 @@ public class QqGatewayClient implements SmartLifecycle {
     private long heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
     private int reconnectAttempt;
 
-    public QqGatewayClient(QqBotProperties properties, QqGatewayApi gatewayApi, AccessTokenProvider tokens,
-                           ObjectMapper mapper, ApplicationEventPublisher eventPublisher) {
-        this.properties = properties;
+    public QqGatewayClient(KohakuConfig config, QqGatewayApi gatewayApi, AccessTokenProvider tokens,
+                           ObjectMapper mapper, Consumer<BotEvent> listener) {
+        this.config = config;
         this.gatewayApi = gatewayApi;
         this.tokens = tokens;
         this.mapper = mapper;
-        this.eventPublisher = eventPublisher;
+        this.listener = listener;
     }
 
-    @Override
     public void start() {
         synchronized (lock) {
             if (running) {
@@ -110,11 +110,10 @@ public class QqGatewayClient implements SmartLifecycle {
                     .build();
         }
         log.info("QQ gateway client starting (intents={} mask={}, shard=[{},{}])",
-                properties.intents(), properties.intentsMask(), properties.shardIndex(), properties.shardTotal());
+                config.intents(), config.intentsMask(), config.shardIndex(), config.shardTotal());
         connect();
     }
 
-    @Override
     public void stop() {
         Connection connection;
         synchronized (lock) {
@@ -133,20 +132,8 @@ public class QqGatewayClient implements SmartLifecycle {
         log.info("QQ gateway client stopped");
     }
 
-    @Override
     public boolean isRunning() {
         return running;
-    }
-
-    @Override
-    public boolean isAutoStartup() {
-        return properties.autoStart();
-    }
-
-    @Override
-    public int getPhase() {
-        // 最后启动、最先停止：确保容器关闭时先断开网关，再关闭 Web 服务器等依赖。
-        return Integer.MAX_VALUE;
     }
 
     // ------------------------------------------------------------------ 连接建立
@@ -324,7 +311,7 @@ public class QqGatewayClient implements SmartLifecycle {
         }
         switch (type) {
             case "READY" -> {
-                BotReadyEvent event = new BotReadyEvent(this, seq, data.path("session_id").stringValue(null),
+                BotReadyEvent event = new BotReadyEvent(seq, data.path("session_id").stringValue(null),
                         new BotUser(data.path("user").path("id").stringValue(null),
                                 data.path("user").path("username").stringValue(null)),
                         readShard(data.path("shard")));
@@ -342,9 +329,9 @@ public class QqGatewayClient implements SmartLifecycle {
                     awaitingHeartbeatAck = false;
                 }
                 log.info("gateway RESUMED, missed events have been replayed");
-                publish(new BotResumedEvent(this, seq));
+                publish(new BotResumedEvent(seq));
             }
-            default -> publish(new BotDispatchEvent(this, seq, type, data));
+            default -> publish(new BotDispatchEvent(seq, type, data));
         }
     }
 
@@ -416,8 +403,8 @@ public class QqGatewayClient implements SmartLifecycle {
     }
 
     private long nextBackoffMillis() {
-        long base = Math.max(1, properties.reconnectInitialDelay().toMillis());
-        long max = Math.max(base, properties.reconnectMaxDelay().toMillis());
+        long base = Math.max(1, config.reconnectInitialDelay().toMillis());
+        long max = Math.max(base, config.reconnectMaxDelay().toMillis());
         long ceiling = Math.min(max, base << Math.min(reconnectAttempt, MAX_BACKOFF_SHIFT));
         reconnectAttempt++;
         long spread = Math.max(1, ceiling / 5);
@@ -449,14 +436,14 @@ public class QqGatewayClient implements SmartLifecycle {
             data.put("session_id", sessionId);
             data.put("seq", lastSeq);
         } else {
-            data.put("intents", properties.intentsMask());
+            data.put("intents", config.intentsMask());
             ArrayNode shard = data.putArray("shard");
-            shard.add(properties.shardIndex());
-            shard.add(properties.shardTotal());
+            shard.add(config.shardIndex());
+            shard.add(config.shardTotal());
             ObjectNode client = data.putObject("properties");
             client.put("$os", System.getProperty("os.name", "unknown"));
-            client.put("$browser", properties.clientName());
-            client.put("$device", properties.clientName());
+            client.put("$browser", config.clientName());
+            client.put("$device", config.clientName());
         }
         ObjectNode payload = mapper.createObjectNode();
         payload.put("op", connection.resume ? GatewayOp.RESUME : GatewayOp.IDENTIFY);
@@ -485,7 +472,7 @@ public class QqGatewayClient implements SmartLifecycle {
 
     private void publish(BotEvent event) {
         try {
-            eventPublisher.publishEvent(event);
+            listener.accept(event);
         } catch (RuntimeException e) {
             // 业务监听器异常不得影响长连接读写循环。
             log.error("gateway event listener failed for {}", event.getClass().getSimpleName(), e);

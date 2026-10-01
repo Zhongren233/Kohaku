@@ -10,6 +10,7 @@ import love.aira.kohaku.api.QqGatewayApi;
 import love.aira.kohaku.api.QqMediaApi;
 import love.aira.kohaku.api.QqMessageApi;
 import love.aira.kohaku.api.QqOpenApiClient;
+import love.aira.kohaku.config.KohakuConfig;
 import love.aira.kohaku.config.QqBotProperties;
 import love.aira.kohaku.gateway.QqGatewayClient;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ class KohakuAutoConfigurationTest {
             assertThat(context).hasSingleBean(QqMediaApi.class);
             assertThat(context).hasSingleBean(QqChannelMessageApi.class);
             assertThat(context).hasSingleBean(QqGatewayClient.class);
+            assertThat(context).hasSingleBean(KohakuLifecycle.class);
         });
     }
 
@@ -77,7 +79,7 @@ class KohakuAutoConfigurationTest {
         runner.withPropertyValues("kohaku.qq.sandbox=true").run(context -> {
             QqBotProperties properties = context.getBean(QqBotProperties.class);
             assertThat(properties.sandbox()).isTrue();
-            assertThat(properties.effectiveApiBaseUrl()).isEqualTo(QqBotProperties.SANDBOX_API_BASE_URL);
+            assertThat(properties.toConfig().effectiveApiBaseUrl()).isEqualTo(KohakuConfig.SANDBOX_API_BASE_URL);
         });
     }
 

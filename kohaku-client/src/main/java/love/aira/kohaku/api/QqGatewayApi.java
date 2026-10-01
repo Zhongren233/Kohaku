@@ -1,6 +1,6 @@
 package love.aira.kohaku.api;
 
-import love.aira.kohaku.config.QqBotProperties;
+import love.aira.kohaku.config.KohakuConfig;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -14,16 +14,16 @@ import tools.jackson.databind.JsonNode;
 public class QqGatewayApi {
 
     private final QqOpenApiClient api;
-    private final QqBotProperties properties;
+    private final KohakuConfig config;
 
-    public QqGatewayApi(QqOpenApiClient api, QqBotProperties properties) {
+    public QqGatewayApi(QqOpenApiClient api, KohakuConfig config) {
         this.api = api;
-        this.properties = properties;
+        this.config = config;
     }
 
     /** 按配置的分片数选择接口并返回 WSS 接入点。 */
     public String url() {
-        JsonNode body = api.get(properties.shardTotal() > 1 ? "/gateway/bot" : "/gateway");
+        JsonNode body = api.get(config.shardTotal() > 1 ? "/gateway/bot" : "/gateway");
         String url = body.path("url").stringValue(null);
         if (url == null || url.isBlank()) {
             throw new QqApiException("gateway url response has no url field: " + body);

@@ -15,7 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
-import love.aira.kohaku.config.QqBotProperties;
+import love.aira.kohaku.config.KohakuConfig;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -33,17 +33,17 @@ public class QqOpenApiClient {
 
     private final HttpClient httpClient;
     private final ObjectMapper mapper;
-    private final QqBotProperties properties;
+    private final KohakuConfig config;
     private final AccessTokenProvider tokens;
 
-    public QqOpenApiClient(HttpClient qqHttpClient, ObjectMapper mapper, QqBotProperties properties,
+    public QqOpenApiClient(HttpClient qqHttpClient, ObjectMapper mapper, KohakuConfig config,
                            AccessTokenProvider tokens) {
         this.httpClient = qqHttpClient;
         // 平台字段是 snake_case：在共享 mapper 基础上派生专用实例，避免改动全局 JSON 配置
         this.mapper = mapper.rebuild()
                 .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
                 .build();
-        this.properties = properties;
+        this.config = config;
         this.tokens = tokens;
     }
 
@@ -151,7 +151,7 @@ public class QqOpenApiClient {
     }
 
     private HttpRequest.Builder request(String path, String authorization) {
-        return HttpRequest.newBuilder(URI.create(properties.effectiveApiBaseUrl() + path))
+        return HttpRequest.newBuilder(URI.create(config.effectiveApiBaseUrl() + path))
                 .timeout(REQUEST_TIMEOUT)
                 .header("Authorization", authorization);
     }

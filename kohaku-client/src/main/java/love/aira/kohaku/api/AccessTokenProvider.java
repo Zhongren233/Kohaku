@@ -5,7 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.time.Duration;
 import java.time.Instant;
-import love.aira.kohaku.config.QqBotProperties;
+import love.aira.kohaku.config.KohakuConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -25,16 +25,16 @@ public class AccessTokenProvider {
 
     private final HttpClient httpClient;
     private final ObjectMapper mapper;
-    private final QqBotProperties properties;
+    private final KohakuConfig config;
 
     private final Object lock = new Object();
     private String accessToken;
     private Instant expiresAt = Instant.EPOCH;
 
-    public AccessTokenProvider(HttpClient qqHttpClient, ObjectMapper mapper, QqBotProperties properties) {
+    public AccessTokenProvider(HttpClient qqHttpClient, ObjectMapper mapper, KohakuConfig config) {
         this.httpClient = qqHttpClient;
         this.mapper = mapper;
-        this.properties = properties;
+        this.config = config;
     }
 
     /** 返回可直接用于 {@code Authorization} 的值，形如 {@code QQBot xxxxx}，必要时自动刷新。 */
@@ -57,9 +57,9 @@ public class AccessTokenProvider {
 
     private void refresh() {
         ObjectNode body = mapper.createObjectNode();
-        body.put("appId", properties.appId());
-        body.put("clientSecret", properties.appSecret());
-        HttpRequest request = HttpRequest.newBuilder(URI.create(properties.tokenUrl()))
+        body.put("appId", config.appId());
+        body.put("clientSecret", config.appSecret());
+        HttpRequest request = HttpRequest.newBuilder(URI.create(config.tokenUrl()))
                 .timeout(REQUEST_TIMEOUT)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))

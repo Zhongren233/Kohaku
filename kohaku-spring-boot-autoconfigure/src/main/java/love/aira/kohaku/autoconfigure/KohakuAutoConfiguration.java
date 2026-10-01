@@ -29,6 +29,7 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>{@code kohaku.qq.auto-start=false} 只装配 Bean，不随容器启动网关连接</li>
  *   <li>{@code kohaku.qq.sandbox=true} 切换到沙箱环境</li>
  *   <li>所有 Bean 都带 {@link ConditionalOnMissingBean}，使用者可用同类型 Bean 覆写</li>
+ *   <li>核心逻辑在纯 Java 的 {@code kohaku-client} 模块，本类只做装配：属性绑定、生命周期适配、事件转发</li>
  * </ul>
  *
  * <p>事件通过 {@link ApplicationEventPublisher} 发布：监听 {@code BotReadyEvent}、{@code BotResumedEvent}、
@@ -53,20 +54,20 @@ public class KohakuAutoConfiguration {
     @ConditionalOnMissingBean
     AccessTokenProvider qqAccessTokenProvider(HttpClient qqHttpClient, ObjectMapper objectMapper,
                                               QqBotProperties properties) {
-        return new AccessTokenProvider(qqHttpClient, objectMapper, properties);
+        return new AccessTokenProvider(qqHttpClient, objectMapper, properties.toConfig());
     }
 
     @Bean
     @ConditionalOnMissingBean
     QqOpenApiClient qqOpenApiClient(HttpClient qqHttpClient, ObjectMapper objectMapper, QqBotProperties properties,
                                     AccessTokenProvider accessTokenProvider) {
-        return new QqOpenApiClient(qqHttpClient, objectMapper, properties, accessTokenProvider);
+        return new QqOpenApiClient(qqHttpClient, objectMapper, properties.toConfig(), accessTokenProvider);
     }
 
     @Bean
     @ConditionalOnMissingBean
     QqGatewayApi qqGatewayApi(QqOpenApiClient qqOpenApiClient, QqBotProperties properties) {
-        return new QqGatewayApi(qqOpenApiClient, properties);
+        return new QqGatewayApi(qqOpenApiClient, properties.toConfig());
     }
 
     @Bean
@@ -92,6 +93,13 @@ public class KohakuAutoConfiguration {
     QqGatewayClient qqGatewayClient(QqBotProperties properties, QqGatewayApi qqGatewayApi,
                                     AccessTokenProvider accessTokenProvider, ObjectMapper objectMapper,
                                     ApplicationEventPublisher eventPublisher) {
-        return new QqGatewayClient(properties, qqGatewayApi, accessTokenProvider, objectMapper, eventPublisher);
+        return new QqGatewayClient(properties.toConfig(), qqGatewayApi, accessTokenProvider, objectMapper,
+                eventPublisher::publishEvent);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    KohakuLifecycle kohakuLifecycle(QqGatewayClient qqGatewayClient, QqBotProperties properties) {
+        return new KohakuLifecycle(qqGatewayClient, properties);
     }
 }

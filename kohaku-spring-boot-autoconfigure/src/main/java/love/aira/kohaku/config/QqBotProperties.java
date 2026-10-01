@@ -2,6 +2,7 @@ package love.aira.kohaku.config;
 
 import java.time.Duration;
 import java.util.List;
+import love.aira.kohaku.config.KohakuConfig;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -67,13 +68,9 @@ public record QqBotProperties(
         }
     }
 
-    /** 由 {@link #intents()} 合并出的位掩码，Identify 时上报给网关。 */
-    public int intentsMask() {
-        return QqIntent.mask(intents);
-    }
-
-    /** 实际使用的开放平台地址：{@link #sandbox()} 为 true 时走沙箱。 */
-    public String effectiveApiBaseUrl() {
-        return sandbox ? SANDBOX_API_BASE_URL : apiBaseUrl;
+    /** 转换为框架无关的运行时配置（校验在两边都保留：这里给出带属性名的提示，核心侧保证独立可用）。 */
+    public KohakuConfig toConfig() {
+        return new KohakuConfig(appId, appSecret, apiBaseUrl, tokenUrl, intents, shardIndex, shardTotal, clientName,
+                autoStart, reconnectInitialDelay, reconnectMaxDelay, sandbox);
     }
 }

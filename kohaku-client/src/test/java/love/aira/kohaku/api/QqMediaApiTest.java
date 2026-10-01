@@ -16,7 +16,7 @@ import love.aira.kohaku.api.model.FileUploadResponse;
 import love.aira.kohaku.api.model.UploadPartFinishRequest;
 import love.aira.kohaku.api.model.UploadPrepareRequest;
 import love.aira.kohaku.api.model.UploadPrepareResponse;
-import love.aira.kohaku.config.QqBotProperties;
+import love.aira.kohaku.config.KohakuConfig;
 import love.aira.kohaku.config.QqIntent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,14 +35,14 @@ class QqMediaApiTest {
     void setUp() {
         server = new FakeQqApiServer();
         mapper = new JsonMapper();
-        QqBotProperties properties = new QqBotProperties("app-id", "app-secret", server.baseUrl(),
+        KohakuConfig config = new KohakuConfig("app-id", "app-secret", server.baseUrl(),
                 server.baseUrl() + "/app/getAppAccessToken", List.of(QqIntent.PUBLIC_GUILD_MESSAGES), 0, 1,
-                "kohaku", true, Duration.ofSeconds(1), Duration.ofSeconds(60), true, false);
+                "kohaku", true, Duration.ofSeconds(1), Duration.ofSeconds(60), false);
         server.stub("POST /app/getAppAccessToken", 200,
                 "{\"access_token\":\"test-token\",\"expires_in\":\"7200\"}");
         HttpClient httpClient = HttpClient.newHttpClient();
-        AccessTokenProvider tokens = new AccessTokenProvider(httpClient, mapper, properties);
-        api = new QqMediaApi(new QqOpenApiClient(httpClient, mapper, properties, tokens), httpClient);
+        AccessTokenProvider tokens = new AccessTokenProvider(httpClient, mapper, config);
+        api = new QqMediaApi(new QqOpenApiClient(httpClient, mapper, config, tokens), httpClient);
     }
 
     @AfterEach

@@ -20,7 +20,7 @@ class QqBotPropertiesBindingTest {
         runner.run(context -> {
             QqBotProperties properties = context.getBean(QqBotProperties.class);
             assertThat(properties.intents()).containsExactly(QqIntent.PUBLIC_GUILD_MESSAGES);
-            assertThat(properties.intentsMask()).isEqualTo(1 << 30);
+            assertThat(properties.toConfig().intentsMask()).isEqualTo(1 << 30);
             assertThat(properties.enabled()).isTrue();
             assertThat(properties.sandbox()).isFalse();
             assertThat(properties.autoStart()).isFalse();
@@ -37,7 +37,7 @@ class QqBotPropertiesBindingTest {
                     QqBotProperties properties = context.getBean(QqBotProperties.class);
                     assertThat(properties.intents()).containsExactly(
                             QqIntent.GUILDS, QqIntent.PUBLIC_GUILD_MESSAGES, QqIntent.GROUP_AND_C2C_EVENT);
-                    assertThat(properties.intentsMask()).isEqualTo((1 << 0) | (1 << 30) | (1 << 25));
+                    assertThat(properties.toConfig().intentsMask()).isEqualTo((1 << 0) | (1 << 30) | (1 << 25));
                 });
     }
 
@@ -47,7 +47,7 @@ class QqBotPropertiesBindingTest {
                 .run(context -> {
                     QqBotProperties properties = context.getBean(QqBotProperties.class);
                     assertThat(properties.intents()).containsExactly(QqIntent.GUILDS, QqIntent.PUBLIC_GUILD_MESSAGES);
-                    assertThat(properties.intentsMask()).isEqualTo((1 << 0) | (1 << 30));
+                    assertThat(properties.toConfig().intentsMask()).isEqualTo((1 << 0) | (1 << 30));
                 });
     }
 
