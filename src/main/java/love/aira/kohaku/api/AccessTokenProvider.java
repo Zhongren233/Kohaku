@@ -66,7 +66,7 @@ public class AccessTokenProvider {
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
                 .build();
-        JsonNode payload = QqOpenApiClient.requireSuccess(HttpCalls.send(httpClient, request));
+        JsonNode payload = ApiResponses.requireSuccess(HttpCalls.send(httpClient, request));
         JsonNode token = payload.get("access_token");
         if (token == null || !token.isString() || token.stringValue().isBlank()) {
             throw new QqApiException("access token response has no access_token field: " + payload);

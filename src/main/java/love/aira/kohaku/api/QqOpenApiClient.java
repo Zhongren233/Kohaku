@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.NullNode;
+import tools.jackson.databind.PropertyNamingStrategies;
 
 /**
  * 开放平台 REST 调用器：统一拼接 base url、注入 {@code Authorization}、解析 JSON、
@@ -32,7 +32,10 @@ public class QqOpenApiClient {
     public QqOpenApiClient(HttpClient qqHttpClient, ObjectMapper mapper, QqBotProperties properties,
                            AccessTokenProvider tokens) {
         this.httpClient = qqHttpClient;
-        this.mapper = mapper;
+        // 平台字段是 snake_case：在共享 mapper 基础上派生专用实例，避免改动全局 JSON 配置
+        this.mapper = mapper.rebuild()
+                .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+                .build();
         this.properties = properties;
         this.tokens = tokens;
     }
@@ -76,7 +79,7 @@ public class QqOpenApiClient {
             tokens.invalidate();
             response = HttpCalls.send(httpClient, requestFactory.apply(tokens.authorization()));
         }
-        return requireSuccess(response);
+        return ApiResponses.requireSuccess(response);
     }
 
     private <T> T convert(JsonNode payload, Class<T> type) {
@@ -84,36 +87,6 @@ public class QqOpenApiClient {
             return mapper.treeToValue(payload, type);
         } catch (JacksonException e) {
             throw new QqApiException("cannot map response to " + type.getSimpleName() + ": " + payload, e);
-        }
-    }
-
-    /** 校验响应：非 2xx 或业务 code 非 0 均抛出 {@link QqApiException}，否则返回响应体。 */
-    static JsonNode requireSuccess(HttpResponse<String> response) {
-        String body = response.body();
-        JsonNode payload = body == null || body.isBlank() ? NullNode.getInstance() : parse(body);
-        if (response.statusCode() / 100 != 2) {
-            throw new QqApiException(response.statusCode(), payload.path("code").asInt(0),
-                    "HTTP " + response.statusCode() + " from " + response.uri().getPath() + ": " + describe(payload, body),
-                    body);
-        }
-        int code = payload.path("code").asInt(0);
-        if (code != 0) {
-            throw new QqApiException(response.statusCode(), code,
-                    "code " + code + " from " + response.uri().getPath() + ": " + describe(payload, body), body);
-        }
-        return payload;
-    }
-
-    private static String describe(JsonNode payload, String body) {
-        String message = payload.path("message").stringValue(null);
-        return message == null || message.isBlank() ? String.valueOf(body) : message;
-    }
-
-    private static JsonNode parse(String body) {
-        try {
-            return new ObjectMapper().readTree(body);
-        } catch (JacksonException e) {
-            return NullNode.getInstance();
         }
     }
 
