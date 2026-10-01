@@ -25,6 +25,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param reconnectMaxDelay      重连退避上限
  * @param enabled                是否启用本 starter（置 false 可整体关闭，连凭据校验也跳过）
  * @param sandbox                是否为沙箱环境；为 true 时强制使用 {@link KohakuConfig#SANDBOX_API_BASE_URL}
+ * @param handlerThreads         按钮处理器的工作线程数（默认 1，保持顺序）；耗时逻辑在此线程池执行，
+ *                               不占用网关读循环
  * @param handlerOrder           事件处理器（{@code BotEventHandler} Bean）的执行顺序，按 Bean 名称声明；
  *                               未列出的处理器排在其后，按 {@code @Order}/{@code Ordered} 顺序执行
  */
@@ -43,7 +45,8 @@ public record QqBotProperties(
         @DefaultValue("60s") Duration reconnectMaxDelay,
         @DefaultValue("true") boolean enabled,
         @DefaultValue("false") boolean sandbox,
-        List<String> handlerOrder) {
+        List<String> handlerOrder,
+        @DefaultValue("1") int handlerThreads) {
 
     /**
      * 缺凭据时的补充提示：{@code spring.config.import} 的 file: 相对路径按进程工作目录解析，
@@ -67,6 +70,9 @@ public record QqBotProperties(
         }
         intents = List.copyOf(intents);
         handlerOrder = handlerOrder == null ? List.of() : List.copyOf(handlerOrder);
+        if (handlerThreads < 1) {
+            throw new IllegalArgumentException("kohaku.qq.handler-threads must be >= 1, was " + handlerThreads);
+        }
         if (shardTotal < 1) {
             throw new IllegalArgumentException("kohaku.qq.shard-total must be >= 1, was " + shardTotal);
         }

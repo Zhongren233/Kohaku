@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import love.aira.kohaku.api.model.Keyboard;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
@@ -147,6 +148,50 @@ class InteractionRouterTest {
                         () -> acking.handle(click("card:next:p=2", 11, 2, "USER", null)))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(acks).containsExactly("EVENT_ID:0", "EVENT_ID:1");
+    }
+
+    @Test
+    void immediateModeWithExecutorAcksThenHandlesOffThread() throws Exception {
+        List<String> order = new CopyOnWriteArrayList<>();
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            card.onHandle = () -> {
+                started.countDown();
+                try {
+                    release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                order.add("handled");
+            };
+            InteractionRouter acking = new InteractionRouter(List.of(card),
+                    (id, code) -> order.add("ack:" + id + ":" + code), InteractionAckMode.IMMEDIATE, executor);
+
+            // 调用方立刻返回，不等耗时逻辑；应答已在返回前完成
+            assertThat(acking.handle(click("card:next:p=2", 11, 2, "USER", null)))
+                    .isEqualTo(HandlerResult.CONSUMED);
+            assertThat(order).containsExactly("ack:EVENT_ID:0");
+            assertThat(started.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(order).doesNotContain("handled");   // 处理器仍在耗时逻辑中
+
+            release.countDown();
+            assertThat(waitFor(() -> order.contains("handled"))).isTrue();
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private static boolean waitFor(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
+        while (System.nanoTime() < deadline) {
+            if (condition.getAsBoolean()) {
+                return true;
+            }
+            Thread.sleep(20);
+        }
+        return condition.getAsBoolean();
     }
 
     @Test

@@ -3,6 +3,7 @@ package love.aira.kohaku.feature;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
 import love.aira.kohaku.gateway.event.model.InteractionCreate;
 import love.aira.kohaku.gateway.event.model.InteractionResolved;
@@ -34,9 +35,10 @@ public final class InteractionRouter implements BotEventHandler<InteractionCreat
     private final Map<String, Map<String, ButtonHandler>> handlersByFeature;
     private final InteractionResponder responder;
     private final InteractionAckMode ackMode;
+    private final Executor handlerExecutor;
 
     public InteractionRouter(List<BotFeature> features) {
-        this(features, null, InteractionAckMode.IMMEDIATE);
+        this(features, null, InteractionAckMode.IMMEDIATE, null);
     }
 
     /**
@@ -44,12 +46,23 @@ public final class InteractionRouter implements BotEventHandler<InteractionCreat
      *                  为 {@code null} 时不自动应答，需业务自行回应，否则客户端会 loading 到超时
      */
     public InteractionRouter(List<BotFeature> features, InteractionResponder responder) {
-        this(features, responder, InteractionAckMode.IMMEDIATE);
+        this(features, responder, InteractionAckMode.IMMEDIATE, null);
     }
 
     public InteractionRouter(List<BotFeature> features, InteractionResponder responder, InteractionAckMode ackMode) {
+        this(features, responder, ackMode, null);
+    }
+
+    /**
+     * @param handlerExecutor 按钮处理器的执行器：非空时在 {@link InteractionAckMode#IMMEDIATE} 模式下，
+     *                        应答后立即把处理逻辑交给它异步执行，避免耗时逻辑顶住网关读循环
+     *                        （Spring 下默认使用 {@code kohakuHandlerExecutor}）；为空则同步执行
+     */
+    public InteractionRouter(List<BotFeature> features, InteractionResponder responder, InteractionAckMode ackMode,
+                             Executor handlerExecutor) {
         this.responder = responder;
         this.ackMode = ackMode == null ? InteractionAckMode.IMMEDIATE : ackMode;
+        this.handlerExecutor = handlerExecutor;
         this.features = List.copyOf(features);
         Map<String, Map<String, ButtonHandler>> byFeature = new LinkedHashMap<>();
         for (BotFeature feature : this.features) {
@@ -96,6 +109,11 @@ public final class InteractionRouter implements BotEventHandler<InteractionCreat
                 handler.getClass().getSimpleName());
         if (ackMode == InteractionAckMode.IMMEDIATE) {
             respond(payload, InteractionResponder.CODE_SUCCESS);   // 先应答，客户端立即结束 loading
+            if (handlerExecutor != null) {
+                // 应答后再把耗时逻辑丢到工作线程，避免顶住网关读循环（心跳/其它事件不受影响）
+                handlerExecutor.execute(() -> runHandler(handler, context, payload));
+                return HandlerResult.CONSUMED;
+            }
         }
         HandlerResult result;
         try {
@@ -112,6 +130,16 @@ public final class InteractionRouter implements BotEventHandler<InteractionCreat
             respond(payload, InteractionResponder.CODE_SUCCESS);
         }
         return result;
+    }
+
+    /** 异步执行处理器：异常只记录（应答已完成，没有链条需要传播）。 */
+    private void runHandler(ButtonHandler handler, ButtonContext context, InteractionCreate payload) {
+        try {
+            handler.onButton(context);
+        } catch (RuntimeException e) {
+            log.error("按钮处理失败 interaction_id={} feature={} action={}", payload.id(), context.featureId(),
+                    context.action(), e);
+        }
     }
 
     /**

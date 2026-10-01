@@ -1,9 +1,13 @@
 package love.aira.kohaku.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import love.aira.kohaku.feature.BotFeature;
 import love.aira.kohaku.feature.ButtonContext;
 import love.aira.kohaku.feature.ButtonHandler;
@@ -107,7 +111,9 @@ class KohakuEventDispatchTest {
                     DemoFeature feature = context.getBean(DemoFeature.class);
                     context.getBean(EventDispatcher.class).dispatch(buttonClick("demo:next:p=2"));
 
-                    assertThat(feature.clicks).containsExactly("2");                      // 点击回到所属功能
+                    // 处理器在 kohakuHandlerExecutor 上异步执行，等它跑完
+                    await().atMost(Duration.ofSeconds(5))
+                            .untilAsserted(() -> assertThat(feature.clicks).containsExactly("2"));   // 点击回到所属功能
                     assertThat(context.getBean(FallbackRecorder.class).received).isEmpty();   // 已消费，不再发布
                 });
     }
@@ -124,6 +130,62 @@ class KohakuEventDispatchTest {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure()).hasStackTraceContaining("INTERACTION");
                 });
+    }
+
+    @Test
+    void buttonHandlingRunsOnHandlerExecutorWithoutBlockingCaller() throws Exception {
+        runner.withUserConfiguration(BlockingFeatureConfiguration.class).run(context -> {
+            assertThat(context).hasBean("kohakuHandlerExecutor");
+            BlockingFeature feature = context.getBean(BlockingFeature.class);
+
+            assertThat(context.getBean(InteractionRouter.class).handle(buttonClick("blocking:go:p=1")))
+                    .isEqualTo(HandlerResult.CONSUMED);
+            // 处理仍在进行，调用方（网关读循环）未被阻塞
+            assertThat(feature.handled.await(200, TimeUnit.MILLISECONDS)).isFalse();
+
+            feature.release.countDown();
+            assertThat(feature.handled.await(2, TimeUnit.SECONDS)).isTrue();
+        });
+    }
+
+    /** 模拟耗时处理器：阻塞在 release 上。 */
+    static class BlockingFeature implements BotFeature {
+
+        final CountDownLatch release = new CountDownLatch(1);
+        final CountDownLatch handled = new CountDownLatch(1);
+
+        @Override
+        public String id() {
+            return "blocking";
+        }
+
+        @Override
+        public List<ButtonHandler> buttonHandlers() {
+            return List.of(new ButtonHandler() {
+                @Override
+                public String action() {
+                    return "go";
+                }
+
+                @Override
+                public HandlerResult onButton(ButtonContext context) {
+                    try {
+                        release.await(5, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    handled.countDown();
+                    return HandlerResult.CONSUMED;
+                }
+            });
+        }
+    }
+
+    static class BlockingFeatureConfiguration {
+        @Bean
+        BlockingFeature blockingFeature() {
+            return new BlockingFeature();
+        }
     }
 
     private static InteractionCreateEvent buttonClick(String buttonData) {
