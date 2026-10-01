@@ -33,17 +33,23 @@ public final class InteractionRouter implements BotEventHandler<InteractionCreat
     private final List<BotFeature> features;
     private final Map<String, Map<String, ButtonHandler>> handlersByFeature;
     private final InteractionResponder responder;
+    private final InteractionAckMode ackMode;
 
     public InteractionRouter(List<BotFeature> features) {
-        this(features, null);
+        this(features, null, InteractionAckMode.IMMEDIATE);
     }
 
     /**
      * @param responder 互动应答器（Spring 下自动装配为 {@code QqInteractionApi::respond}）；
-     *                  为 {@code null} 时不自动应答，需业务自行调用应答接口，否则客户端会 loading 到超时
+     *                  为 {@code null} 时不自动应答，需业务自行回应，否则客户端会 loading 到超时
      */
     public InteractionRouter(List<BotFeature> features, InteractionResponder responder) {
+        this(features, responder, InteractionAckMode.IMMEDIATE);
+    }
+
+    public InteractionRouter(List<BotFeature> features, InteractionResponder responder, InteractionAckMode ackMode) {
         this.responder = responder;
+        this.ackMode = ackMode == null ? InteractionAckMode.IMMEDIATE : ackMode;
         this.features = List.copyOf(features);
         Map<String, Map<String, ButtonHandler>> byFeature = new LinkedHashMap<>();
         for (BotFeature feature : this.features) {
@@ -88,14 +94,21 @@ public final class InteractionRouter implements BotEventHandler<InteractionCreat
                 payload.userOpenid(), payload.groupOpenid(), payload.groupMemberOpenid());
         log.debug("按钮点击 {}.{} 交给 {} 处理", context.featureId(), context.action(),
                 handler.getClass().getSimpleName());
+        if (ackMode == InteractionAckMode.IMMEDIATE) {
+            respond(payload, InteractionResponder.CODE_SUCCESS);   // 先应答，客户端立即结束 loading
+        }
         HandlerResult result;
         try {
             result = handler.onButton(context);
         } catch (RuntimeException e) {
-            respond(payload, InteractionResponder.CODE_FAILED);   // 处理失败也要应答，避免客户端一直 loading
+            if (ackMode == InteractionAckMode.AFTER_HANDLING) {
+                respond(payload, InteractionResponder.CODE_FAILED);
+            } else {
+                log.warn("已提前应答成功，但按钮处理失败 interaction_id={}: {}", payload.id(), e.toString());
+            }
             throw e;
         }
-        if (result == HandlerResult.CONSUMED) {
+        if (ackMode == InteractionAckMode.AFTER_HANDLING && result == HandlerResult.CONSUMED) {
             respond(payload, InteractionResponder.CODE_SUCCESS);
         }
         return result;
@@ -103,7 +116,10 @@ public final class InteractionRouter implements BotEventHandler<InteractionCreat
 
     /**
      * 应答互动事件（{@code PUT /interactions/{d.id}}）：平台要求 type=11/12 必须回应，否则客户端 loading 到超时。
-     * 这里只在「处理成功」与「处理抛异常」时应答；返回 IGNORED 时交给链上后续处理器决定。
+     *
+     * <p>只对「命中处理器」的点击应答：{@link InteractionAckMode#IMMEDIATE} 在调用处理器前应答成功；
+     * {@link InteractionAckMode#AFTER_HANDLING} 在处理器返回 CONSUMED 时应答成功、抛异常时应答失败。
+     * 命中但返回 {@code IGNORED}（或未命中任何处理器）不应答，交由链上后续处理器决定。
      */
     private void respond(InteractionCreate payload, int code) {
         if (responder == null || payload.id() == null) {

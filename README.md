@@ -210,6 +210,11 @@ public class CardFeature implements BotFeature {
 
 - **键盘只在 markdown 消息上渲染（实测，文档未写）**：`msg_type=0`（纯文本）带 `keyboard` 会被平台静默丢弃，
   所以发送带按钮的消息必须用 `SendMessageRequest.markdown(...)`；`QqMessageApi` 检测到该误用会打 WARN。
+- **必须应答互动（实测踩坑）**：收到 `INTERACTION_CREATE` 后要调用 `PUT /interactions/{interaction_id}`
+  （`interaction_id` 取事件体 **`d.id`**，**不带** `INTERACTION_CREATE:` 前缀），**否则客户端一直 loading 到超时** ——
+  这与「被动回复一条消息」是两件事，缺一不可（回复消息的 `event_id` 则要带前缀的最外层 id）。
+  框架默认 `InteractionAckMode.IMMEDIATE`：**命中处理器后先应答 code=0**（客户端立刻结束 loading）再执行处理器；
+  可选 `AFTER_HANDLING` 让 `code` 反映真实结果（成功 0 / 抛异常 1）。未命中处理器时不应答。
 - 未命中（未知功能 / 未知动作 / data 非法 / 非按钮互动）→ `IGNORED`，继续走处理链并最终落到 `@EventListener`；
 - 回复用 `InteractionReplies.reply(messages, ctx, request)`：自动按场景选单聊/群聊并用互动事件 id 做被动回复。
 - 平台约束：单聊/群聊**没有编辑消息接口** → 每次翻页是发一条新消息（旧键盘随旧消息失效）；
