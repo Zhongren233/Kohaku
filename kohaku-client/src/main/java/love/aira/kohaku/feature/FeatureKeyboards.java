@@ -29,6 +29,15 @@ public final class FeatureKeyboards {
         return Keyboard.Button.callback(buttonId, label, ButtonData.encode(featureId, action, state));
     }
 
+    /**
+     * 生成一个**指令按钮**：点击后客户端把 {@code command} 当作一条普通消息发出，机器人侧按命令解析。
+     *
+     * <p>适用于未开通 {@code INTERACTION} 权限（收不到互动事件）的机器人：整条链路只依赖消息事件。
+     */
+    public static Keyboard.Button commandButton(String buttonId, String label, String command) {
+        return Keyboard.Button.command(buttonId, label, command);
+    }
+
     /** 翻页行：上一页 / 页码（点击按当前状态重渲染） / 下一页。 */
     public static Keyboard pagination(String featureId, Pagination pagination, Map<String, String> state) {
         List<Keyboard.Button> buttons = new ArrayList<>(3);

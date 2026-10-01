@@ -201,6 +201,13 @@ public class CardFeature implements BotFeature {
 - **状态放在 data 里（方案 A）**：机器人侧无状态、跨重启可用；状态过大时应改用「token + 服务端会话表」。
 - 助手：`FeatureKeyboards.pagination(featureId, pagination, state)` 生成 上一页/页码/下一页；
   `Pagination.of(page, size, total)` 负责页码夹取与切片。
+两种按钮写法，按机器人是否开通「互动事件」权限选择：
+
+| 模式 | 写法 | 点击后的链路 | 前置条件 |
+| --- | --- | --- | --- |
+| **指令按钮**（默认，免权限） | `FeatureKeyboards.commandButton(id, label, "/card next 2")` | 客户端把 data 当**普通消息**发出 → 走消息事件 + 命令解析 | 无 |
+| 回调按钮 | `FeatureKeyboards.pagination(...)` / `button(...)`（data = `card:next:p=2`） | 平台下发 `INTERACTION_CREATE(type=11)` → `InteractionRouter` 投递给所属功能 | 需订阅 `INTERACTION(1<<26)` **且已在开放平台开通「互动事件」权限**；未开通时订阅不报错但收不到事件，客户端会一直提示「请求超时」 |
+
 - **键盘只在 markdown 消息上渲染（实测，文档未写）**：`msg_type=0`（纯文本）带 `keyboard` 会被平台静默丢弃，
   所以发送带按钮的消息必须用 `SendMessageRequest.markdown(...)`；`QqMessageApi` 检测到该误用会打 WARN。
 - 未命中（未知功能 / 未知动作 / data 非法 / 非按钮互动）→ `IGNORED`，继续走处理链并最终落到 `@EventListener`；

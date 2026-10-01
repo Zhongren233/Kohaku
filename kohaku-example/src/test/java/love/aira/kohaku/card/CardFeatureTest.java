@@ -46,7 +46,8 @@ class CardFeatureTest {
                 .contains("C-001").contains("C-005")
                 .doesNotContain("C-006");
         assertThat(buttonIds(request)).containsExactly("page", "next");
-        assertThat(buttonData(request, 1)).isEqualTo("card:next:p=2");
+        assertThat(buttonData(request, 1)).isEqualTo("/card next 2");
+        assertThat(buttonType(request, 1)).isEqualTo(2);   // 指令按钮：点击即发一条命令消息
     }
 
     @Test
@@ -54,7 +55,7 @@ class CardFeatureTest {
         SendMessageRequest last = CardFeature.page(3);
         assertThat(last.markdown().content()).contains("卡片列表 3/3").contains("C-011").contains("C-012");
         assertThat(buttonIds(last)).containsExactly("prev", "page");
-        assertThat(buttonData(last, 0)).isEqualTo("card:prev:p=2");
+        assertThat(buttonData(last, 0)).isEqualTo("/card prev 2");
 
         assertThat(CardFeature.page(99).markdown().content()).contains("卡片列表 3/3");   // 越界页码被夹回
     }
@@ -103,7 +104,22 @@ class CardFeatureTest {
     }
 
     @Test
+    void commandButtonClickRendersTargetPage() {
+        BotEventHandler<C2cMessageCreateEvent> entry = c2cEntry();
+
+        // 指令按钮点击后，客户端会把 data 作为普通消息发出
+        assertThat(entry.handle(c2cMessage("/card next 2"))).isEqualTo(HandlerResult.CONSUMED);
+
+        assertThat(captureSentToUser().markdown().content()).contains("卡片列表 2/3");
+    }
+
+    @Test
     void recognizesCommandWithArguments() {
+        assertThat(CardFeature.requestedPage("/card")).isEqualTo(1);
+        assertThat(CardFeature.requestedPage("/card next 3")).isEqualTo(3);
+        assertThat(CardFeature.requestedPage("/card 2")).isEqualTo(2);
+        assertThat(CardFeature.requestedPage("/card bogus 2")).isZero();
+        assertThat(CardFeature.requestedPage("你好")).isZero();
         assertThat(CardFeature.isCommand("/card")).isTrue();
         assertThat(CardFeature.isCommand("  /card 3 ")).isTrue();
         assertThat(CardFeature.isCommand("/cards")).isFalse();
@@ -132,6 +148,10 @@ class CardFeatureTest {
         return request.keyboard().content().rows().getFirst().buttons().stream()
                 .map(Keyboard.Button::id)
                 .toList();
+    }
+
+    private static Integer buttonType(SendMessageRequest request, int index) {
+        return request.keyboard().content().rows().getFirst().buttons().get(index).action().type();
     }
 
     private static String buttonData(SendMessageRequest request, int index) {
