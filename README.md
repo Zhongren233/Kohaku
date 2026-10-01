@@ -43,15 +43,26 @@ kohaku:
 @EventListener
 void onMessage(BotDispatchEvent event) {
     if ("C2C_MESSAGE_CREATE".equals(event.type())) {
-        String openid = event.data().path("author").path("user_openid").stringValue();
-        String msgId = event.data().path("id").stringValue();
-        messages.sendToUser(openid, SendMessageRequest.text("你好").replyingTo(msgId));   // 被动回复
+        messages.sendToUser(event.data().path("author").path("user_openid").stringValue(),
+                SendMessageRequest.text("你好"));   // 原始报文路径：手写目标与被动标记
     }
 }
 ```
 
+**回复用 `BotReplies`**（统一入口，推荐）：
+
+```java
+replies.text(event, "pong");                                     // 纯文本
+replies.markdown(event, "# 标题", keyboard);                      // 带按钮（键盘必须 markdown 承载）
+replies.send(event, SendMessageRequest.image(url));               // 自定义请求，仍自动补目标与被动标记
+replies.sendToChannel(event, ChannelMessageRequest.text("hi"));   // 频道 / 频道私信
+```
+
+自动处理：单聊/群聊的目标 openid、`msg_id + msg_seq`（**自动递增**，避免"相同 msg_id+msg_seq"报错）、
+互动事件的**最外层** `event_id`；调用方已指定被动标记时不覆盖；不支持回复的事件直接抛 `IllegalArgumentException`。
+
 引入即连接；可直接注入 `QqMessageApi`、`QqMediaApi`、`QqChannelMessageApi`、`QqGatewayClient`、
-`QqOpenApiClient`、`AccessTokenProvider`。这些 Bean 都带 `@ConditionalOnMissingBean`，可自行覆写。
+`QqOpenApiClient`、`AccessTokenProvider`、`BotReplies`。这些 Bean 都带 `@ConditionalOnMissingBean`，可自行覆写。
 
 ## 实现范围
 
@@ -117,10 +128,8 @@ client.stop();       // 优雅停机
 ```java
 @EventListener
 void onMessage(C2cMessageCreateEvent event) {
-    String openid = event.payload().author().userOpenid();
-    String msgId  = event.payload().id();
-    String idx    = event.payload().messageScene().messageIndex();   // msg_idx，平台要求据此去重
-    messages.sendToUser(openid, SendMessageRequest.text("你好").replyingTo(msgId));
+    String idx = event.payload().messageScene().messageIndex();   // msg_idx，平台要求据此去重
+    replies.text(event, "你好");        // 目标 openid、msg_id、msg_seq 全自动
 }
 ```
 
@@ -155,8 +164,7 @@ public class EchoHandler implements BotEventHandler<C2cMessageCreateEvent> {
     public Class<C2cMessageCreateEvent> eventType() { return C2cMessageCreateEvent.class; }
 
     public HandlerResult handle(C2cMessageCreateEvent event) {
-        messages.sendToUser(event.payload().author().userOpenid(),
-                SendMessageRequest.text("echo: " + event.payload().content()).replyingTo(event.payload().id(), 1));
+        replies.text(event, "echo: " + event.payload().content());
         return HandlerResult.CONSUMED;
     }
 }
@@ -220,7 +228,8 @@ public class CardFeature implements BotFeature {
   耗时逻辑不会顶住网关读循环（心跳与其它事件不受影响）；
   可选 `AFTER_HANDLING` 让 `code` 反映真实结果（成功 0 / 抛异常 1）。未命中处理器时不应答。
 - 未命中（未知功能 / 未知动作 / data 非法 / 非按钮互动）→ `IGNORED`，继续走处理链并最终落到 `@EventListener`；
-- 回复用 `InteractionReplies.reply(messages, ctx, request)`：自动按场景选单聊/群聊并用互动事件 id 做被动回复。
+- 回复用统一的 `BotReplies`：`replies.send(ctx.interaction(), request)` —— 自动按场景选单聊/群聊、
+  自动用**最外层**事件 id 作 `event_id` 被动回复。
 - 平台约束：单聊/群聊**没有编辑消息接口** → 每次翻页是发一条新消息（旧键盘随旧消息失效）；
   被动回复时效 单聊 60 分钟 / 群聊 5 分钟。
 
@@ -239,8 +248,7 @@ public class PingHandler implements BotEventHandler<C2cMessageCreateEvent> {
         if (!"/ping".equals(event.payload().content())) {
             return HandlerResult.IGNORED;     // 不是自己的命令一定要忽略，交给后面的处理器
         }
-        messages.sendToUser(event.payload().author().userOpenid(),
-                SendMessageRequest.text("pong").replyingTo(event.payload().id(), 1));   // 被动回复
+        replies.text(event, "pong");      // 目标与被动标记由 BotReplies 解析（含 msg_seq 自增）
         return HandlerResult.CONSUMED;
     }
 }

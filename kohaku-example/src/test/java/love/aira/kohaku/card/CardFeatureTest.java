@@ -1,18 +1,18 @@
 package love.aira.kohaku.card;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.List;
 import java.util.Map;
-import love.aira.kohaku.api.QqMessageApi;
 import love.aira.kohaku.api.model.Keyboard;
 import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.feature.ButtonContext;
 import love.aira.kohaku.feature.ButtonHandler;
+import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
 import love.aira.kohaku.gateway.event.model.C2cMessage;
@@ -22,6 +22,7 @@ import love.aira.kohaku.gateway.event.model.InteractionResolved;
 import love.aira.kohaku.gateway.event.model.MessageAuthor;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
 import love.aira.kohaku.gateway.handler.HandlerResult;
+import love.aira.kohaku.reply.BotReplies;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.json.JsonMapper;
@@ -29,8 +30,10 @@ import tools.jackson.databind.json.JsonMapper;
 /** 示例功能 `\\/card`：分页渲染、命令入口与翻页按钮回调。 */
 class CardFeatureTest {
 
-    private final QqMessageApi messages = mock(QqMessageApi.class);
-    private final CardFeature feature = new CardFeature(messages);
+    private final BotReplies replies = mock(BotReplies.class);
+    private final CardFeature feature = new CardFeature(replies);
+    private final ArgumentCaptor<BotEvent> repliedEvent = ArgumentCaptor.forClass(BotEvent.class);
+    private final ArgumentCaptor<SendMessageRequest> repliedRequest = ArgumentCaptor.forClass(SendMessageRequest.class);
 
     @Test
     void rendersFirstPageWithNextButtonOnly() {
@@ -72,10 +75,9 @@ class CardFeatureTest {
 
         assertThat(entry.handle(event)).isEqualTo(HandlerResult.CONSUMED);
 
-        SendMessageRequest sent = captureSentToUser();
+        SendMessageRequest sent = captureReplied();
         assertThat(sent.markdown().content()).contains("卡片列表 1/3");
-        assertThat(sent.msgId()).isEqualTo("MSG_1");           // 被动回复
-        assertThat(sent.msgSeq()).isEqualTo(1);
+        assertThat(repliedEvent.getValue()).isSameAs(event);   // 按事件回复，目标与被动标记由 BotReplies 解析
     }
 
     @Test
@@ -85,7 +87,7 @@ class CardFeatureTest {
         assertThat(entry.handle(c2cMessage("你好"))).isEqualTo(HandlerResult.IGNORED);
         assertThat(entry.handle(c2cMessage(null))).isEqualTo(HandlerResult.IGNORED);
         assertThat(entry.handle(c2cMessage("/other"))).isEqualTo(HandlerResult.IGNORED);
-        verifyNoInteractions(messages);
+        verifyNoInteractions(replies);
     }
 
     @Test
@@ -93,10 +95,8 @@ class CardFeatureTest {
         assertThat(button("next").onButton(context("card:next:p=2", Map.of("p", "2"))))
                 .isEqualTo(HandlerResult.CONSUMED);
 
-        SendMessageRequest sent = captureSentToUser();
+        SendMessageRequest sent = captureReplied();
         assertThat(sent.markdown().content()).contains("卡片列表 2/3").contains("C-006").contains("C-010");
-        assertThat(sent.eventId()).isEqualTo("INTERACTION_CREATE:EVENT_ID");   // 用「最外层」事件 id 被动回复
-        assertThat(sent.msgSeq()).isNull();
         assertThat(buttonIds(sent)).containsExactly("prev", "page", "next");   // 第二页前后都有
     }
 
@@ -105,7 +105,7 @@ class CardFeatureTest {
         assertThat(button("page").onButton(context("card:page:p=2", Map.of("p", "2"))))
                 .isEqualTo(HandlerResult.CONSUMED);
 
-        assertThat(captureSentToUser().markdown().content()).contains("卡片列表 2/3");
+        assertThat(captureReplied().markdown().content()).contains("卡片列表 2/3");
     }
 
     @Test
@@ -115,7 +115,7 @@ class CardFeatureTest {
         // 指令按钮点击后，客户端会把 data 作为普通消息发出
         assertThat(entry.handle(c2cMessage("/card next 2"))).isEqualTo(HandlerResult.CONSUMED);
 
-        assertThat(captureSentToUser().markdown().content()).contains("卡片列表 2/3");
+        assertThat(captureReplied().markdown().content()).contains("卡片列表 2/3");
     }
 
     @Test
@@ -143,10 +143,10 @@ class CardFeatureTest {
                 .orElseThrow(() -> new AssertionError("未注册的按钮动作: " + action));
     }
 
-    private SendMessageRequest captureSentToUser() {
-        ArgumentCaptor<SendMessageRequest> captor = ArgumentCaptor.forClass(SendMessageRequest.class);
-        verify(messages).sendToUser(eq("USER_OPENID"), captor.capture());
-        return captor.getValue();
+    /** 捕获「功能 → BotReplies」的一次回复。目标选择与 msg_id/msg_seq/event_id 由 BotReplies 负责（见 BotRepliesTest）。 */
+    private SendMessageRequest captureReplied() {
+        verify(replies, atLeastOnce()).send(repliedEvent.capture(), repliedRequest.capture());
+        return repliedRequest.getValue();
     }
 
     private static List<String> buttonIds(SendMessageRequest request) {

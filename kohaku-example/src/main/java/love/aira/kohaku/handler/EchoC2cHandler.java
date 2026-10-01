@@ -1,7 +1,6 @@
 package love.aira.kohaku.handler;
 
-import love.aira.kohaku.api.QqMessageApi;
-import love.aira.kohaku.api.model.SendMessageRequest;
+import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.model.C2cMessage;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
@@ -23,10 +22,10 @@ public class EchoC2cHandler implements BotEventHandler<C2cMessageCreateEvent> {
 
     private static final Logger log = LoggerFactory.getLogger(EchoC2cHandler.class);
 
-    private final QqMessageApi messages;
+    private final BotReplies replies;
 
-    public EchoC2cHandler(QqMessageApi messages) {
-        this.messages = messages;
+    public EchoC2cHandler(BotReplies replies) {
+        this.replies = replies;
     }
 
     @Override
@@ -44,8 +43,8 @@ public class EchoC2cHandler implements BotEventHandler<C2cMessageCreateEvent> {
         String openid = message.author().userOpenid();
         log.info("收到单聊消息 openid={} msg_idx={} content={}", openid, message.messageScene().messageIndex(),
                 message.content());
-        // 被动回复：携带 msg_id，单聊 60 分钟内有效、同一消息最多回复 4 次（多次回复需递增 msg_seq）
-        messages.sendToUser(openid, SendMessageRequest.text("echo: " + message.content()).replyingTo(message.id(), 1));
+        // 被动回复：BotReplies 自动带 msg_id 并递增 msg_seq（单聊 60 分钟内有效、最多 4 次）
+        replies.text(event, "echo: " + message.content());
         return HandlerResult.CONSUMED;
     }
 }

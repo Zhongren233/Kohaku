@@ -18,16 +18,16 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 基于 JDK HttpServer 的开放平台假服务端：按 {@code METHOD /path} 预置响应，并记录收到的请求
  * （方法、路径、Authorization、请求体），用于断言接口的路径/报文/鉴权与错误处理。
  */
-final class FakeQqApiServer implements AutoCloseable {
+public final class FakeQqApiServer implements AutoCloseable {
 
-    record Call(String method, String path, String query, String authorization, String contentType, String body) {
+    public record Call(String method, String path, String query, String authorization, String contentType, String body) {
     }
 
     private final HttpServer server;
     private final List<Call> calls = new CopyOnWriteArrayList<>();
     private final Map<String, Deque<String[]>> stubs = new ConcurrentHashMap<>();
 
-    FakeQqApiServer() {
+    public FakeQqApiServer() {
         try {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         } catch (IOException e) {
@@ -38,29 +38,29 @@ final class FakeQqApiServer implements AutoCloseable {
         server.start();
     }
 
-    String baseUrl() {
+    public String baseUrl() {
         return "http://127.0.0.1:" + server.getAddress().getPort();
     }
 
     /** 预置响应；同一 key 可多次预置，按顺序消费，用尽后返回 500 便于发现多余请求。 */
     @SafeVarargs
-    final void stub(String methodAndPath, Map.Entry<Integer, String>... responses) {
+    public final void stub(String methodAndPath, Map.Entry<Integer, String>... responses) {
         Deque<String[]> queue = stubs.computeIfAbsent(methodAndPath, key -> new ArrayDeque<>());
         for (Map.Entry<Integer, String> response : responses) {
             queue.add(new String[] {String.valueOf(response.getKey()), response.getValue()});
         }
     }
 
-    void stub(String methodAndPath, int status, String body) {
+    public void stub(String methodAndPath, int status, String body) {
         stubs.computeIfAbsent(methodAndPath, key -> new ArrayDeque<>())
                 .add(new String[] {String.valueOf(status), body});
     }
 
-    List<Call> calls(String methodAndPath) {
+    public List<Call> calls(String methodAndPath) {
         return calls.stream().filter(call -> methodAndPath.equals(call.method() + " " + call.path())).toList();
     }
 
-    List<Call> calls() {
+    public List<Call> calls() {
         return new ArrayList<>(calls);
     }
 

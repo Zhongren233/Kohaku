@@ -20,6 +20,7 @@ import love.aira.kohaku.config.QqIntent;
 import love.aira.kohaku.feature.BotFeature;
 import love.aira.kohaku.feature.InteractionAckMode;
 import love.aira.kohaku.feature.InteractionRouter;
+import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.gateway.QqGatewayClient;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
 import love.aira.kohaku.gateway.handler.EventDispatcher;
@@ -101,6 +102,13 @@ public class KohakuAutoConfiguration {
     @ConditionalOnMissingBean
     QqChannelMessageApi qqChannelMessageApi(QqOpenApiClient qqOpenApiClient) {
         return new QqChannelMessageApi(qqOpenApiClient);
+    }
+
+    /** 统一的被动回复入口：按入站事件自动选目标、补 msg_id/msg_seq 或 event_id。 */
+    @Bean
+    @ConditionalOnMissingBean
+    BotReplies qqBotReplies(QqMessageApi qqMessageApi, QqChannelMessageApi qqChannelMessageApi) {
+        return new BotReplies(qqMessageApi, qqChannelMessageApi);
     }
 
     @Bean

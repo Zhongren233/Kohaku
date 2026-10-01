@@ -1,7 +1,6 @@
 package love.aira.kohaku.handler;
 
-import love.aira.kohaku.api.QqMessageApi;
-import love.aira.kohaku.api.model.SendMessageRequest;
+import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
 import love.aira.kohaku.gateway.event.model.GroupMessage;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
@@ -18,10 +17,10 @@ public class EchoGroupHandler implements BotEventHandler<GroupAtMessageCreateEve
 
     private static final Logger log = LoggerFactory.getLogger(EchoGroupHandler.class);
 
-    private final QqMessageApi messages;
+    private final BotReplies replies;
 
-    public EchoGroupHandler(QqMessageApi messages) {
-        this.messages = messages;
+    public EchoGroupHandler(BotReplies replies) {
+        this.replies = replies;
     }
 
     @Override
@@ -38,8 +37,7 @@ public class EchoGroupHandler implements BotEventHandler<GroupAtMessageCreateEve
         }
         log.info("收到群消息 group={} member={} content={}", message.groupOpenid(), message.author().memberOpenid(),
                 content);
-        messages.sendToGroup(message.groupOpenid(),
-                SendMessageRequest.text("echo: " + message.content()).replyingTo(message.id(), 1));
+        replies.text(event, "echo: " + message.content());
         return HandlerResult.CONSUMED;
     }
 }

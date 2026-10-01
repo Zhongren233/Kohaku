@@ -3,13 +3,14 @@ package love.aira.kohaku.card;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import love.aira.kohaku.api.QqMessageApi;
 import love.aira.kohaku.api.model.Keyboard;
 import love.aira.kohaku.api.model.SendMessageRequest;
+import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.feature.BotFeature;
+import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.feature.ButtonContext;
+import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.feature.ButtonHandler;
-import love.aira.kohaku.feature.InteractionReplies;
 import love.aira.kohaku.support.Pagination;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
@@ -55,10 +56,10 @@ public class CardFeature implements BotFeature {
             new Card("C-011", "项目看板", "进行中/待办/完成"),
             new Card("C-012", "复盘模板", "每周一次小复盘"));
 
-    private final QqMessageApi messages;
+    private final BotReplies replies;
 
-    public CardFeature(QqMessageApi messages) {
-        this.messages = messages;
+    public CardFeature(BotReplies replies) {
+        this.replies = replies;
     }
 
     @Override
@@ -116,7 +117,7 @@ public class CardFeature implements BotFeature {
                 int target = context.intState(CardKeyboards.STATE_PAGE, 1);
                 log.info("card 翻页 action={} target={} scene={} chat={}", action, target, context.scene(),
                         context.userOpenid() != null ? context.userOpenid() : context.groupOpenid());
-                InteractionReplies.reply(messages, context, page(target));
+                replies.send(context.interaction(), page(target));
                 return HandlerResult.CONSUMED;
             }
         };
@@ -135,8 +136,7 @@ public class CardFeature implements BotFeature {
                 if (page == 0) {
                     return HandlerResult.IGNORED;   // 不是本功能的命令，交给后面的处理器
                 }
-                messages.sendToUser(event.payload().author().userOpenid(),
-                        page(page).replyingTo(event.payload().id(), 1));
+                replies.send(event, page(page));
                 return HandlerResult.CONSUMED;
             }
         };
@@ -155,8 +155,7 @@ public class CardFeature implements BotFeature {
                 if (page == 0) {
                     return HandlerResult.IGNORED;
                 }
-                messages.sendToGroup(event.payload().groupOpenid(),
-                        page(page).replyingTo(event.payload().id(), 1));
+                replies.send(event, page(page));
                 return HandlerResult.CONSUMED;
             }
         };
