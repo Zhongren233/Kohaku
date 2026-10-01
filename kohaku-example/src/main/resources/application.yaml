@@ -17,6 +17,9 @@ kohaku:
     # 以下均为默认值，按需覆盖即可
     # api-base-url: https://api.sgroup.qq.com   # 沙箱：https://sandbox.api.sgroup.qq.com
     # token-url: https://bots.qq.com/app/getAppAccessToken
+    # handler-order:               # 事件处理器执行顺序（Bean 名称；未列出的按 @Order 排在其后）
+    #   - echoC2cHandler
+    #   - echoGroupHandler
     # shard-index: 0
     # shard-total: 1
     # client-name: kohaku

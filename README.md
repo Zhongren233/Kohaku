@@ -138,10 +138,45 @@ void onMessage(C2cMessageCreateEvent event) {
 事件体与文档不符（字段类型异常）时会回落到原始事件并记 warning，不会打断长连接；
 未收录的事件类型可用 `GatewayEventDecoder#payload(JsonNode, Class)` 手动解析。
 
+## 事件处理器链
+
+实现 `BotEventHandler<E>` 并注册为 Bean（或自行构造 `EventDispatcher`），即可按声明顺序处理事件：
+
+- 返回 `HandlerResult.CONSUMED` → **终止**，后续处理器与兜底消费者都不再执行；
+- 返回 `HandlerResult.IGNORED` → 继续下一个处理器；
+- 处理器抛异常 → 记 error 日志并按 `IGNORED` 继续（不打断长连接与后续处理器）；
+- 全部忽略 → 事件落到兜底消费者，即**发布为容器事件**给 `@EventListener`（没有处理器时行为与之前完全一致）。
+
+```java
+@Component
+@Order(10)      // 顺序也可用 kohaku.qq.handler-order 按 Bean 名称显式声明
+public class EchoHandler implements BotEventHandler<C2cMessageCreateEvent> {
+
+    public Class<C2cMessageCreateEvent> eventType() { return C2cMessageCreateEvent.class; }
+
+    public HandlerResult handle(C2cMessageCreateEvent event) {
+        messages.sendToUser(event.payload().author().userOpenid(),
+                SendMessageRequest.text("echo: " + event.payload().content()).replyingTo(event.payload().id(), 1));
+        return HandlerResult.CONSUMED;
+    }
+}
+```
+
+```yaml
+kohaku:
+  qq:
+    handler-order:            # Bean 名称列表，优先于 @Order；未列出的处理器排在其后
+      - echoC2cHandler
+      - echoGroupHandler
+```
+
+纯 Java（无 Spring）：`new EventDispatcher(List.of(handler1, handler2), unconsumed -> …)`，执行顺序即列表顺序。
+`kohaku-example` 内含两个可运行示例处理器（`EchoC2cHandler`、`EchoGroupHandler`）。
+
 ## 构建与验证
 
 ```bash
-./mvnw clean test                              # 76 例：核心(事件反序列化/配置/编码/报文/关闭码) + 自动配置 + 假网关端到端 + 示例
+./mvnw clean test                              # 88 例：核心(事件反序列化/配置/编码/报文/关闭码) + 自动配置 + 假网关端到端 + 示例
 ./mvnw -DskipTests install                     # 安装本地坐标
 ./mvnw -pl kohaku-example spring-boot:run      # 用示例机器人真机连网关
 ```

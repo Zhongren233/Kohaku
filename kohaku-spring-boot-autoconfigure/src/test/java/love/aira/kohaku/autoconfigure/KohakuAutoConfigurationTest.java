@@ -13,6 +13,7 @@ import love.aira.kohaku.api.QqOpenApiClient;
 import love.aira.kohaku.config.KohakuConfig;
 import love.aira.kohaku.config.QqBotProperties;
 import love.aira.kohaku.gateway.QqGatewayClient;
+import love.aira.kohaku.gateway.handler.EventDispatcher;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
@@ -40,6 +41,7 @@ class KohakuAutoConfigurationTest {
             assertThat(context).hasSingleBean(QqChannelMessageApi.class);
             assertThat(context).hasSingleBean(QqGatewayClient.class);
             assertThat(context).hasSingleBean(KohakuLifecycle.class);
+            assertThat(context).hasSingleBean(EventDispatcher.class);
         });
     }
 
