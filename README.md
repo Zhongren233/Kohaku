@@ -119,3 +119,7 @@ GitHub Packages 的 Maven 仓库即便对公开仓库也要求带 token 访问�
 - GitHub Packages 不允许覆盖同名同版本，要重发必须先删除该版本再执行，或换个版本号。
 - `kohaku-example` 不发布：GitHub Packages 走 `maven.deploy.skip`，Central 走 `-pl '!:kohaku-example'`
   （该插件不识别 `maven.deploy.skip`）。
+
+## 许可证
+
+[Apache License 2.0](LICENSE)。
