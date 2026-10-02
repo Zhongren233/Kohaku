@@ -1,6 +1,5 @@
 package love.aira.kohaku.autoconfigure;
 
-import love.aira.kohaku.config.QqBotProperties;
 import love.aira.kohaku.gateway.QqGatewayClient;
 import org.springframework.context.SmartLifecycle;
 

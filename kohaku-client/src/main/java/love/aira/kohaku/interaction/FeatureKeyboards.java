@@ -1,4 +1,4 @@
-package love.aira.kohaku.feature;
+package love.aira.kohaku.interaction;
 
 import java.util.Map;
 import love.aira.kohaku.api.model.Keyboard;

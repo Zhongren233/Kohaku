@@ -1,4 +1,4 @@
-package love.aira.kohaku.feature;
+package love.aira.kohaku.interaction;
 
 /**
  * 互动事件应答：{@link InteractionRouter} 在处理完按钮点击后调用它通知平台（否则客户端一直 loading 直到超时）。

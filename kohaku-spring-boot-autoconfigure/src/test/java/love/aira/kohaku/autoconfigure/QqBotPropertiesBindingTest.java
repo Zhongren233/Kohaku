@@ -1,8 +1,9 @@
-package love.aira.kohaku.config;
+package love.aira.kohaku.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import love.aira.kohaku.autoconfigure.KohakuAutoConfiguration;
+import love.aira.kohaku.config.QqIntent;
+import love.aira.kohaku.config.KohakuConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;

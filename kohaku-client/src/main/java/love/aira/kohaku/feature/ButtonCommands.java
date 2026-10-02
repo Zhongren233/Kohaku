@@ -5,6 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import love.aira.kohaku.interaction.ButtonData;
 import java.util.Set;
 import java.util.function.Function;
 import love.aira.kohaku.api.model.SendMessageRequest;
@@ -26,9 +27,9 @@ import love.aira.kohaku.support.Mentions;
  * <pre>{@code
  * @Bean
  * BotFeature card(BotReplies replies) {
- *     return ButtonFeature.of("card")                            // 默认入口命令 = /card
+ *     return ButtonCommands.of("card")                            // 默认入口命令 = /card
  *             .state(CardFeature::state)                          // 命令参数 → 状态；null 表示参数不成立
- *             .render(CardFeature::page)                          // 状态 → 消息（入口与按钮共用）
+ *             .render(CardFeature::page)                          // 上下文（状态+事件+身份）→ 消息，两条路径共用
  *             .build(replies);                                    // 默认动作 next/prev/page
  * }
  * }</pre>
@@ -41,18 +42,23 @@ import love.aira.kohaku.support.Mentions;
  *       （全量消息的 content 保留 {@code <@id>}），因此群里 {@code @机器人 /card} 与 {@code /card} 等效；</li>
  *   <li>按钮：每个动作一个回调，**从按钮 data 的 state 里取状态**再渲染 —— 状态自描述，
  *       所以"点第 3 页"与"发 /card next 3"走同一条渲染路径，重复点击/重放天然幂等；</li>
+ *   <li>渲染能拿到触发事件与身份：{@code render} 收到的是 {@link FeatureContext} —— 入口路径是那条消息
+ *       事件，按钮路径是本次互动事件，触发者/群直接读 {@code context.userOpenid()}（各场景都有值） /
+ *       {@code groupOpenid()}（仅群聊非空）；</li>
  *   <li>被动回复走 {@link BotReplies}（目标、msg_id/msg_seq、互动 event_id、超限告警全自动）。</li>
  * </ul>
  *
  * <p>状态即按钮 data 的 state 段（{@link ButtonData}），只承载渲染所需的键值（如页码），不要塞大对象；
- * 键盘怎么画、状态含义是什么属于业务，见示例 {@code CardKeyboards}。
+ * 身份（发送者/群）与触发事件不要在状态里传 —— 状态会写进按钮 data 发给客户端，而
+ * {@link FeatureContext} 已经把它们交给 {@code render} 了。键盘怎么画、状态含义是什么属于业务，
+ * 见示例 {@code CardKeyboards}。
  */
-public final class ButtonFeature {
+public final class ButtonCommands {
 
     /** 默认按钮动作：与 {@code CardKeyboards} 那类翻页键盘的 action 段一致。 */
     private static final List<String> DEFAULT_ACTIONS = List.of("next", "prev", "page");
 
-    private ButtonFeature() {
+    private ButtonCommands() {
     }
 
     public static Builder of(String featureId) {
@@ -65,7 +71,7 @@ public final class ButtonFeature {
         private final Set<String> commands = new LinkedHashSet<>();
         private final List<String> actions = new ArrayList<>(DEFAULT_ACTIONS);
         private Function<CommandArgs, Map<String, String>> stateParser;
-        private Function<Map<String, String>, SendMessageRequest> renderer;
+        private Function<FeatureContext, SendMessageRequest> renderer;
 
         private Builder(String featureId) {
             Objects.requireNonNull(featureId, "featureId");
@@ -120,8 +126,13 @@ public final class ButtonFeature {
             return this;
         }
 
-        /** 状态 → 消息：入口与按钮回调**共用**这一个函数，保证两条路径渲染一致。 */
-        public Builder render(Function<Map<String, String>, SendMessageRequest> renderer) {
+        /** 上下文 → 消息：入口与按钮回调**共用**这一个函数，保证两条路径渲染一致。
+         *
+         * <p>触发事件与身份（发送者、群）在 {@link FeatureContext} 上：入口路径是那条消息事件，
+         * 按钮路径是本次互动事件。状态本身只承载渲染所需的键值（如页码）——身份不要塞进状态，
+         * 那会写进按钮 data 发给客户端。
+         */
+        public Builder render(Function<FeatureContext, SendMessageRequest> renderer) {
             this.renderer = Objects.requireNonNull(renderer, "render");
             return this;
         }
@@ -129,7 +140,7 @@ public final class ButtonFeature {
         public BotFeature build(BotReplies replies) {
             Objects.requireNonNull(replies, "replies");
             Objects.requireNonNull(stateParser, "state（命令参数 → 状态）");
-            Objects.requireNonNull(renderer, "render（状态 → 消息）");
+            Objects.requireNonNull(renderer, "render（上下文 → 消息）");
             if (commands.isEmpty()) {
                 commands.add("/" + featureId);
             }
@@ -144,8 +155,7 @@ public final class ButtonFeature {
                             event -> entry(event, commandText(event.payload()), replies));
             for (String action : buttonActions) {
                 feature.button(action, context -> {
-                    SendMessageRequest request = render(context.state());
-                    replies.send(context.interaction(), request);
+                    replies.send(context.interaction(), render(context));
                     return HandlerResult.CONSUMED;
                 });
             }
@@ -169,14 +179,15 @@ public final class ButtonFeature {
             if (state == null || state.isEmpty()) {
                 return HandlerResult.IGNORED;
             }
-            replies.send(event, render(state));
+            replies.send(event, render(FeatureContext.ofMessage(event, state)));
             return HandlerResult.CONSUMED;
         }
 
-        private SendMessageRequest render(Map<String, String> state) {
-            SendMessageRequest request = renderer.apply(Map.copyOf(state));
+        private SendMessageRequest render(FeatureContext context) {
+            SendMessageRequest request = renderer.apply(context);
             if (request == null) {
-                throw new IllegalStateException("render 返回了 null：状态 " + state + "（功能 " + featureId + "）");
+                throw new IllegalStateException("render 返回了 null：状态 " + context.state()
+                        + "（功能 " + featureId + "）");
             }
             return request;
         }

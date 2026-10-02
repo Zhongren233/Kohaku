@@ -12,7 +12,6 @@ import love.aira.kohaku.api.QqInteractionApi;
 import love.aira.kohaku.api.QqMessageApi;
 import love.aira.kohaku.api.QqOpenApiClient;
 import love.aira.kohaku.config.KohakuConfig;
-import love.aira.kohaku.config.QqBotProperties;
 import love.aira.kohaku.gateway.QqGatewayClient;
 import love.aira.kohaku.gateway.handler.EventDispatcher;
 import org.junit.jupiter.api.Test;

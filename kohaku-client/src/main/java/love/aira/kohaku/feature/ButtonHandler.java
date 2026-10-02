@@ -16,7 +16,7 @@ public interface ButtonHandler {
     String action();
 
     /** 处理点击；可用 {@link love.aira.kohaku.reply.BotReplies} 直接做被动回复。 */
-    HandlerResult onButton(ButtonContext context);
+    HandlerResult onButton(FeatureContext context);
 
     /**
      * 函数式构造：
@@ -28,7 +28,7 @@ public interface ButtonHandler {
      * });
      * }</pre>
      */
-    static ButtonHandler of(String action, Function<ButtonContext, HandlerResult> handler) {
+    static ButtonHandler of(String action, Function<FeatureContext, HandlerResult> handler) {
         Objects.requireNonNull(action, "action");
         Objects.requireNonNull(handler, "handler");
         return new ButtonHandler() {
@@ -38,7 +38,7 @@ public interface ButtonHandler {
             }
 
             @Override
-            public HandlerResult onButton(ButtonContext context) {
+            public HandlerResult onButton(FeatureContext context) {
                 return handler.apply(context);
             }
         };

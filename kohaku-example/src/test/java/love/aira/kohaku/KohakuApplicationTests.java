@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import love.aira.kohaku.card.CardFeature;
 import love.aira.kohaku.feature.BotFeature;
-import love.aira.kohaku.feature.InteractionRouter;
+import love.aira.kohaku.interaction.InteractionRouter;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
 import love.aira.kohaku.gateway.event.model.InteractionCreate;
 import love.aira.kohaku.gateway.event.model.InteractionData;

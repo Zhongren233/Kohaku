@@ -3,6 +3,7 @@ package love.aira.kohaku.feature;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import love.aira.kohaku.interaction.ButtonData;
 import java.util.function.Function;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
@@ -83,8 +84,8 @@ public interface BotFeature {
             return this;
         }
 
-        /** 按钮回调：action 与按钮 data 中的动作段一致。 */
-        public Builder button(String action, Function<ButtonContext, HandlerResult> handler) {
+        /** 按钮回调：action 与按钮 data 中的动作段一致；上下文见 {@link FeatureContext}。 */
+        public Builder button(String action, Function<FeatureContext, HandlerResult> handler) {
             ButtonData.requireSimple("action", action);
             buttonHandlers.add(ButtonHandler.of(action, handler));
             return this;

@@ -9,9 +9,9 @@ import java.util.List;
 import java.util.Map;
 import love.aira.kohaku.api.model.Keyboard;
 import love.aira.kohaku.feature.BotFeature;
-import love.aira.kohaku.feature.ButtonContext;
+import love.aira.kohaku.feature.FeatureContext;
 import love.aira.kohaku.feature.ButtonHandler;
-import love.aira.kohaku.feature.InteractionRouter;
+import love.aira.kohaku.interaction.InteractionRouter;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
@@ -71,7 +71,7 @@ class TodoFeatureTest {
         entry().handle(c2c("/todo add 买菜"));
         entry().handle(c2c("/todo add 写周报"));
 
-        ButtonContext click = context("todo:done:id=1", Map.of(TodoFeature.STATE_ID, "1"));
+        FeatureContext click = context("todo:done:id=1", Map.of(TodoFeature.STATE_ID, "1"));
         assertThat(button(TodoFeature.ACTION_DONE).onButton(click)).isEqualTo(HandlerResult.CONSUMED);
 
         assertThat(capturedMarkdown()).contains("#2 写周报");
@@ -217,8 +217,8 @@ class TodoFeatureTest {
         return new InteractionCreateEvent(1, "INTERACTION_CREATE:EVENT_ID", new JsonMapper().readTree("{}"), payload);
     }
 
-    private static ButtonContext context(String buttonData, Map<String, String> state) {
-        return new ButtonContext(interaction(buttonData), TodoFeature.ID, TodoFeature.ACTION_DONE, state, "done-1",
-                buttonData, 2, "c2c", "USER_OPENID", null, null);
+    private static FeatureContext context(String buttonData, Map<String, String> state) {
+        return FeatureContext.ofButton(interaction(buttonData), TodoFeature.ID, TodoFeature.ACTION_DONE, state,
+                "done-1", buttonData);
     }
 }

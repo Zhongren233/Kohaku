@@ -1,4 +1,4 @@
-package love.aira.kohaku.feature;
+package love.aira.kohaku.interaction;
 
 /**
  * 互动事件的应答时机。

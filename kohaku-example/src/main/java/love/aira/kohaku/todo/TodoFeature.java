@@ -6,7 +6,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import love.aira.kohaku.api.model.Keyboard;
 import love.aira.kohaku.feature.BotFeature;
-import love.aira.kohaku.feature.FeatureKeyboards;
+import love.aira.kohaku.interaction.FeatureKeyboards;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;

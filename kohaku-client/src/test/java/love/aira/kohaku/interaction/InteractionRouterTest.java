@@ -1,4 +1,4 @@
-package love.aira.kohaku.feature;
+package love.aira.kohaku.interaction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -10,6 +10,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import love.aira.kohaku.api.model.Keyboard;
 import love.aira.kohaku.gateway.event.BotEvent;
+import love.aira.kohaku.feature.FeatureContext;
+import love.aira.kohaku.feature.ButtonHandler;
+import love.aira.kohaku.feature.BotFeature;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
 import love.aira.kohaku.gateway.event.model.InteractionCreate;
 import love.aira.kohaku.gateway.event.model.InteractionData;
@@ -31,23 +34,26 @@ class InteractionRouterTest {
 
         assertThat(result).isEqualTo(HandlerResult.CONSUMED);
         assertThat(card.handled).hasSize(1);
-        ButtonContext context = card.handled.getFirst();
-        assertThat(context.featureId()).isEqualTo("card");
-        assertThat(context.action()).isEqualTo("next");
+        FeatureContext context = card.handled.getFirst();
+        assertThat(context.button().featureId()).isEqualTo("card");
+        assertThat(context.button().action()).isEqualTo("next");
         assertThat(context.intState("p", 1)).isEqualTo(2);
         assertThat(context.eventId()).isEqualTo("INTERACTION_CREATE:EVENT_ID");   // 用最外层事件 id
-        assertThat(context.buttonId()).isEqualTo("btn-1");
+        assertThat(context.button().buttonId()).isEqualTo("btn-1");
         assertThat(context.isC2c()).isTrue();
         assertThat(context.userOpenid()).isEqualTo("USER_OPENID");
     }
 
     @Test
     void routesGroupSceneClick() {
-        router.handle(click("card:next:p=3", 11, 1, null, "GROUP_OPENID"));
+        // 群聊下发 group_member_openid，单聊下发 user_openid —— 同一个用户是同一个值，
+        // 因此统一由 userOpenid() 读出，业务侧不必按场景分支
+        router.handle(click("card:next:p=3", 11, 1, null, "GROUP_OPENID", "PERSON_OPENID"));
 
-        ButtonContext context = card.handled.getFirst();
+        FeatureContext context = card.handled.getFirst();
         assertThat(context.isGroup()).isTrue();
         assertThat(context.groupOpenid()).isEqualTo("GROUP_OPENID");
+        assertThat(context.userOpenid()).isEqualTo("PERSON_OPENID");
     }
 
     @Test
@@ -225,7 +231,7 @@ class InteractionRouterTest {
             }
 
             @Override
-            public HandlerResult onButton(ButtonContext context) {
+            public HandlerResult onButton(FeatureContext context) {
                 return HandlerResult.CONSUMED;
             }
         };
@@ -233,10 +239,15 @@ class InteractionRouterTest {
 
     private static InteractionCreateEvent click(String buttonData, int type, Integer chatType, String userOpenid,
                                                 String groupOpenid) {
+        return click(buttonData, type, chatType, userOpenid, groupOpenid, null);
+    }
+
+    private static InteractionCreateEvent click(String buttonData, int type, Integer chatType, String userOpenid,
+                                                String groupOpenid, String groupMemberOpenid) {
         InteractionResolved resolved = new InteractionResolved(buttonData, "btn-1", null, null, null, null, null, null,
                 null, null);
         InteractionCreate payload = new InteractionCreate("EVENT_ID", type, chatType == 2 ? "c2c" : "group", chatType,
-                "2026-10-02T00:00:00+08:00", null, null, userOpenid, groupOpenid, null,
+                "2026-10-02T00:00:00+08:00", null, null, userOpenid, groupOpenid, groupMemberOpenid,
                 new InteractionData(type, resolved), 1, "102012345");
         return new InteractionCreateEvent(1, "INTERACTION_CREATE:EVENT_ID", new JsonMapper().readTree("{}"), payload);
     }
@@ -244,7 +255,7 @@ class InteractionRouterTest {
     /** 被测功能：只注册一个 next 动作。 */
     static final class CardFeature implements BotFeature {
 
-        final List<ButtonContext> handled = new CopyOnWriteArrayList<>();
+        final List<FeatureContext> handled = new CopyOnWriteArrayList<>();
         HandlerResult result = HandlerResult.CONSUMED;
         RuntimeException failure;
         Runnable onHandle = () -> { };
@@ -263,7 +274,7 @@ class InteractionRouterTest {
                 }
 
                 @Override
-                public HandlerResult onButton(ButtonContext context) {
+                public HandlerResult onButton(FeatureContext context) {
                     onHandle.run();
                     handled.add(context);
                     if (failure != null) {

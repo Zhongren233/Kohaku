@@ -1,4 +1,4 @@
-package love.aira.kohaku.feature;
+package love.aira.kohaku.interaction;
 
 import java.net.URLDecoder;
 import java.net.URLEncoder;

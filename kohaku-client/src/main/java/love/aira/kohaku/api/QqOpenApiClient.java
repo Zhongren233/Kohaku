@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import love.aira.kohaku.config.KohakuConfig;
-import love.aira.kohaku.support.SnakeCaseMappers;
+import love.aira.kohaku.internal.SnakeCaseMappers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;

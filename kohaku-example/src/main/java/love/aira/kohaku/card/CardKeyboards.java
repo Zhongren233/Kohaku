@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import love.aira.kohaku.api.model.Keyboard;
-import love.aira.kohaku.feature.FeatureKeyboards;
+import love.aira.kohaku.interaction.FeatureKeyboards;
 import love.aira.kohaku.support.Pagination;
 
 /**

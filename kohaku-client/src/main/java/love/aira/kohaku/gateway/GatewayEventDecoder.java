@@ -40,7 +40,7 @@ import love.aira.kohaku.gateway.event.model.Guild;
 import love.aira.kohaku.gateway.event.model.InteractionCreate;
 import love.aira.kohaku.gateway.event.model.MessageAudited;
 import love.aira.kohaku.gateway.event.BotDispatchEvent;
-import love.aira.kohaku.support.SnakeCaseMappers;
+import love.aira.kohaku.internal.SnakeCaseMappers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;

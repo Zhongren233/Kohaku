@@ -9,6 +9,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
+import love.aira.kohaku.interaction.InteractionRouter;
 import love.aira.kohaku.gateway.event.model.C2cMessage;
 import love.aira.kohaku.gateway.event.model.InteractionCreate;
 import love.aira.kohaku.gateway.event.model.InteractionData;
@@ -81,7 +82,7 @@ class BotFeatureTest {
 
     @Test
     void builtFeatureRoutesButtonClickBackToItsOwnHandler() {
-        List<ButtonContext> clicked = new CopyOnWriteArrayList<>();
+        List<FeatureContext> clicked = new CopyOnWriteArrayList<>();
         BotFeature feature = BotFeature.of("card")
                 .button("next", context -> {
                     clicked.add(context);
@@ -94,7 +95,7 @@ class BotFeatureTest {
 
         assertThat(result).isEqualTo(HandlerResult.CONSUMED);
         assertThat(clicked).hasSize(1);
-        assertThat(clicked.getFirst().featureId()).isEqualTo("card");
+        assertThat(clicked.getFirst().button().featureId()).isEqualTo("card");
         assertThat(clicked.getFirst().intState("p", 0)).isEqualTo(2);
     }
 

@@ -19,6 +19,7 @@ import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupMessageCreateEvent;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
+import love.aira.kohaku.interaction.InteractionRouter;
 import love.aira.kohaku.gateway.event.model.C2cMessage;
 import love.aira.kohaku.gateway.event.model.GroupMessage;
 import love.aira.kohaku.gateway.event.model.InteractionCreate;
@@ -39,7 +40,7 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>用真实 {@link BotReplies} + 假 HTTP 服务，断言的是**真正发出的报文**。
  */
-class ButtonFeatureTest {
+class ButtonCommandsTest {
 
     private static final String TOKEN_BODY = "{\"access_token\":\"test-token\",\"expires_in\":\"7200\"}";
     private static final String SENT = "{\"id\":\"ROBOT1.0_sent\",\"timestamp\":\"2026-10-02T10:00:00+08:00\"}";
@@ -68,14 +69,14 @@ class ButtonFeatureTest {
         server.close();
     }
 
-    /** 被测骨架：/card 命令 + 「文本 → 页码状态」与「状态 → 消息」两个纯函数。 */
+    /** 被测骨架：/card 命令 + 「文本 → 页码状态」与「上下文 → 消息」两个纯函数。 */
     private BotFeature feature() {
-        return ButtonFeature.of("card")
+        return ButtonCommands.of("card")
                 .commands("/card")
                 .state(args -> Map.of("p", Integer.toString(args.isEmpty() ? 1 : args.intAt(0, 1))))
-                .render(state -> {
-                    rendered.add(state);
-                    return SendMessageRequest.markdown("# 第 " + state.get("p") + " 页");
+                .render(context -> {
+                    rendered.add(context.state());
+                    return SendMessageRequest.markdown("# 第 " + context.state("p") + " 页");
                 })
                 .build(replies);
     }
@@ -162,9 +163,9 @@ class ButtonFeatureTest {
     void defaultCommandIsSlashId() {
         server.stub(USER_PATH, 200, SENT);      // 假服务按次消费 stub，两次调用要两条
         server.stub(USER_PATH, 200, SENT);
-        BotFeature feature = ButtonFeature.of("vote")
+        BotFeature feature = ButtonCommands.of("vote")
                 .state(args -> Map.of("q", "1"))
-                .render(state -> SendMessageRequest.text("投票"))
+                .render(context -> SendMessageRequest.text("投票"))
                 .build(replies);
 
         assertThat(c2cEntry(feature).handle(c2cMessage("/vote"))).isEqualTo(HandlerResult.CONSUMED);
@@ -187,6 +188,43 @@ class ButtonFeatureTest {
                 .contains("\"event_id\":\"INTERACTION_CREATE:EVENT_ID\"").contains("# 第 2 页");
     }
 
+    /**
+     * 渲染时能拿到触发事件与身份：入口路径是那条消息事件，按钮路径是本次互动事件。
+     * 按钮路径**没有**当初产生按钮的那条消息 —— 状态只来自按钮 data。
+     *
+     * <p>触发者只有一个标识：单聊下发 {@code user_openid}、群聊下发 {@code group_member_openid}，
+     * 同一个用户是同一个值，所以两条路径都用 {@code userOpenid()} 读，不必按场景分支；
+     * {@code groupOpenid()} 只在群聊非空。
+     */
+    @Test
+    void renderSeesTriggeringEventAndUnifiedSender() {
+        List<String> seen = new ArrayList<>();
+        BotFeature feature = ButtonCommands.of("vote")
+                .state(args -> Map.of("q", "1"))
+                .render(context -> {
+                    seen.add(context.event().getClass().getSimpleName() + "|" + context.scene() + "|"
+                            + context.userOpenid() + "|" + context.groupOpenid()
+                            + "|" + context.eventId() + "|" + context.intState("q", -1));
+                    return SendMessageRequest.text("ok");
+                })
+                .build(replies);
+        server.stub("POST /v2/users/OPENID_1/messages", 200, SENT);   // 单聊入口
+        server.stub(GROUP_PATH, 200, SENT);                          // 群入口
+        server.stub(USER_PATH, 200, SENT);                           // 按钮（点击者 USER_OPENID）
+
+        c2cEntry(feature).handle(new C2cMessageCreateEvent(1, "C2C_MESSAGE_CREATE:ID", raw(),
+                new C2cMessage("MSG_1", user("OPENID_1"), "/vote", null, null, null, null, null, null)));
+        groupEntry(feature).handle(new GroupAtMessageCreateEvent(2, "GROUP_AT_MESSAGE_CREATE:ID", raw(),
+                new GroupMessage("MSG_G", member("OPENID_1"), "/vote", "GROUP_OPENID", null, null, null, null, null,
+                        null, null)));
+        button(feature, "next").onButton(context("vote:next;q=1", Map.of("q", "1")));
+
+        assertThat(seen).containsExactly(
+                "C2cMessageCreateEvent|c2c|OPENID_1|null|C2C_MESSAGE_CREATE:ID|1",
+                "GroupAtMessageCreateEvent|group|OPENID_1|GROUP_OPENID|GROUP_AT_MESSAGE_CREATE:ID|1",
+                "InteractionCreateEvent|c2c|USER_OPENID|null|INTERACTION_CREATE:EVENT_ID|1");
+    }
+
     @Test
     void defaultsToNextPrevPageActions() {
         assertThat(feature().buttonHandlers()).extracting(ButtonHandler::action)
@@ -195,9 +233,9 @@ class ButtonFeatureTest {
 
     @Test
     void customActionsReplaceDefaults() {
-        BotFeature feature = ButtonFeature.of("vote")
+        BotFeature feature = ButtonCommands.of("vote")
                 .state(args -> Map.of("q", "1"))
-                .render(state -> SendMessageRequest.text("投票"))
+                .render(context -> SendMessageRequest.text("投票"))
                 .actions("yes", "no")
                 .build(replies);
 
@@ -206,22 +244,22 @@ class ButtonFeatureTest {
 
     @Test
     void rejectsIncompleteConfigurationAtBuildTime() {
-        assertThatThrownBy(() -> ButtonFeature.of("vote").render(state -> SendMessageRequest.text("x")).build(replies))
+        assertThatThrownBy(() -> ButtonCommands.of("vote").render(context -> SendMessageRequest.text("x")).build(replies))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("state");
-        assertThatThrownBy(() -> ButtonFeature.of("vote").state(args -> Map.of()).build(replies))
+        assertThatThrownBy(() -> ButtonCommands.of("vote").state(args -> Map.of()).build(replies))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("render");
-        assertThatThrownBy(() -> ButtonFeature.of("bad id"))
+        assertThatThrownBy(() -> ButtonCommands.of("bad id"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("featureId");
-        assertThatThrownBy(() -> ButtonFeature.of("vote").commands("   "))
+        assertThatThrownBy(() -> ButtonCommands.of("vote").commands("   "))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("命令前缀");
-        assertThatThrownBy(() -> ButtonFeature.of("vote").commands("/a b"))
+        assertThatThrownBy(() -> ButtonCommands.of("vote").commands("/a b"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("空白");
-        assertThatThrownBy(() -> ButtonFeature.of("vote").actions())
+        assertThatThrownBy(() -> ButtonCommands.of("vote").actions())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("按钮动作");
         assertThat(server.calls()).isEmpty();
@@ -229,9 +267,9 @@ class ButtonFeatureTest {
 
     @Test
     void renderReturningNullFailsLoudlyInsteadOfSilentlyIgnoring() {
-        BotFeature feature = ButtonFeature.of("vote")
+        BotFeature feature = ButtonCommands.of("vote")
                 .state(args -> Map.of("q", "1"))
-                .render(state -> null)
+                .render(context -> null)
                 .build(replies);
 
         assertThatThrownBy(() -> c2cEntry(feature).handle(c2cMessage("/vote")))
@@ -270,14 +308,14 @@ class ButtonFeatureTest {
                 .orElseThrow();
     }
 
-    private static ButtonContext context(String buttonData, Map<String, String> state) {
+    private static FeatureContext context(String buttonData, Map<String, String> state) {
         InteractionResolved resolved = new InteractionResolved(buttonData, "btn-1", null, null, null, null, null, null,
                 null, null);
         InteractionCreate payload = new InteractionCreate("EVENT_ID", InteractionRouter.TYPE_INLINE_KEYBOARD, "c2c", 2,
                 "2026-10-02T10:00:00+08:00", null, null, "USER_OPENID", null, null,
                 new InteractionData(InteractionRouter.TYPE_INLINE_KEYBOARD, resolved), 1, "102012345");
-        return new ButtonContext(new InteractionCreateEvent(1, "INTERACTION_CREATE:EVENT_ID", raw(), payload), "card",
-                "next", state, "btn-1", buttonData, 2, "c2c", "USER_OPENID", null, null);
+        return FeatureContext.ofButton(new InteractionCreateEvent(1, "INTERACTION_CREATE:EVENT_ID", raw(), payload),
+                "card", "next", state, "btn-1", buttonData);
     }
 
     private static C2cMessageCreateEvent c2cMessage(String content) {
@@ -304,6 +342,16 @@ class ButtonFeatureTest {
 
     private static MessageAuthor botMention() {
         return new MessageAuthor("BOT_OPENID", "kohaku", true, null, null, null, null, "BOT_OPENID", "member");
+    }
+
+    /** 单聊消息的发送者：平台只下发 user_openid。 */
+    private static MessageAuthor user(String userOpenid) {
+        return new MessageAuthor("ID_1", "用户", false, null, null, null, userOpenid, null, null);
+    }
+
+    /** 群消息的发送者：平台只下发 member_openid（同一个人在单聊里的 user_openid 是同一个值）。 */
+    private static MessageAuthor member(String memberOpenid) {
+        return new MessageAuthor("ID_1", "用户", false, null, null, null, null, memberOpenid, "member");
     }
 
     private static MessageAuthor author() {

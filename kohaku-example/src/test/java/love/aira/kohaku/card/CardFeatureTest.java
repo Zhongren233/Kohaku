@@ -11,7 +11,7 @@ import java.util.Map;
 import love.aira.kohaku.api.model.Keyboard;
 import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.feature.BotFeature;
-import love.aira.kohaku.feature.ButtonContext;
+import love.aira.kohaku.feature.FeatureContext;
 import love.aira.kohaku.feature.ButtonHandler;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
@@ -171,12 +171,12 @@ class CardFeatureTest {
         return new C2cMessageCreateEvent(1, "C2C_MESSAGE_CREATE:EVENT_ID", new JsonMapper().readTree("{}"), message);
     }
 
-    private static ButtonContext context(String buttonData, Map<String, String> state) {
+    private static FeatureContext context(String buttonData, Map<String, String> state) {
         InteractionResolved resolved = new InteractionResolved(buttonData, "btn-1", null, null, null, null, null, null,
                 null, null);
         InteractionCreate payload = new InteractionCreate("EVENT_ID", 11, "c2c", 2, "2026-10-02T00:00:00+08:00",
                 null, null, "USER_OPENID", null, null, new InteractionData(11, resolved), 1, "102012345");
         InteractionCreateEvent event = new InteractionCreateEvent(1, "INTERACTION_CREATE:EVENT_ID", new JsonMapper().readTree("{}"), payload);
-        return new ButtonContext(event, "card", "next", state, "btn-1", buttonData, 2, "c2c", "USER_OPENID", null, null);
+        return FeatureContext.ofButton(event, "card", "next", state, "btn-1", buttonData);
     }
 }

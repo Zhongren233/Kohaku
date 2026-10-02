@@ -1,8 +1,9 @@
-package love.aira.kohaku.config;
+package love.aira.kohaku.autoconfigure;
 
 import java.time.Duration;
 import java.util.List;
 import love.aira.kohaku.config.KohakuConfig;
+import love.aira.kohaku.config.QqIntent;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 

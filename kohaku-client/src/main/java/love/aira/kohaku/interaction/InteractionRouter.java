@@ -1,9 +1,12 @@
-package love.aira.kohaku.feature;
+package love.aira.kohaku.interaction;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import love.aira.kohaku.feature.FeatureContext;
+import love.aira.kohaku.feature.ButtonHandler;
+import love.aira.kohaku.feature.BotFeature;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
 import love.aira.kohaku.gateway.event.model.InteractionCreate;
 import love.aira.kohaku.gateway.event.model.InteractionResolved;
@@ -102,10 +105,9 @@ public final class InteractionRouter implements BotEventHandler<InteractionCreat
             log.debug("未注册的按钮回调: feature={} action={}", parts.featureId(), parts.action());
             return HandlerResult.IGNORED;
         }
-        ButtonContext context = new ButtonContext(event, parts.featureId(), parts.action(), parts.state(),
-                resolved.buttonId(), resolved.buttonData(), payload.chatType(), payload.scene(),
-                payload.userOpenid(), payload.groupOpenid(), payload.groupMemberOpenid());
-        log.debug("按钮点击 {}.{} 交给 {} 处理", context.featureId(), context.action(),
+        FeatureContext context = FeatureContext.ofButton(event, parts.featureId(), parts.action(), parts.state(),
+                resolved.buttonId(), resolved.buttonData());
+        log.debug("按钮点击 {}.{} 交给 {} 处理", parts.featureId(), parts.action(),
                 handler.getClass().getSimpleName());
         if (ackMode == InteractionAckMode.IMMEDIATE) {
             respond(payload, InteractionResponder.CODE_SUCCESS);   // 先应答，客户端立即结束 loading
@@ -133,12 +135,12 @@ public final class InteractionRouter implements BotEventHandler<InteractionCreat
     }
 
     /** 异步执行处理器：异常只记录（应答已完成，没有链条需要传播）。 */
-    private void runHandler(ButtonHandler handler, ButtonContext context, InteractionCreate payload) {
+    private void runHandler(ButtonHandler handler, FeatureContext context, InteractionCreate payload) {
         try {
             handler.onButton(context);
         } catch (RuntimeException e) {
-            log.error("按钮处理失败 interaction_id={} feature={} action={}", payload.id(), context.featureId(),
-                    context.action(), e);
+            log.error("按钮处理失败 interaction_id={} feature={} action={}", payload.id(),
+                    context.button().featureId(), context.button().action(), e);
         }
     }
 

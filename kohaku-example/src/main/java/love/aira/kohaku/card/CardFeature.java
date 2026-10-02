@@ -4,7 +4,8 @@ import java.util.List;
 import java.util.Map;
 import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.feature.BotFeature;
-import love.aira.kohaku.feature.ButtonFeature;
+import love.aira.kohaku.feature.ButtonCommands;
+import love.aira.kohaku.feature.FeatureContext;
 import love.aira.kohaku.reply.BotReplies;
 import love.aira.kohaku.support.CommandArgs;
 import love.aira.kohaku.support.Pagination;
@@ -52,7 +53,7 @@ public class CardFeature {
      *
      * <p>默认使用**指令按钮**（点击＝发一条 {@code /card …} 命令）：不依赖 {@code INTERACTION} 权限，
      * 整条链路只走消息事件。若机器人已开通互动事件权限，可把 {@link #USE_INTERACTION_BUTTONS} 打开，
-     * 改为回调按钮（点击走 {@link love.aira.kohaku.feature.InteractionRouter} → 本功能的 ButtonHandler）。
+     * 改为回调按钮（点击走 {@link love.aira.kohaku.interaction.InteractionRouter} → 本功能的 ButtonHandler）。
      */
     public static SendMessageRequest page(int requestedPage) {
         Pagination pagination = Pagination.of(requestedPage, PAGE_SIZE, CARDS.size());
@@ -69,15 +70,15 @@ public class CardFeature {
     }
 
     /**
-     * 装配为功能单元：命令入口 + 三个翻页按钮由 {@link ButtonFeature} 骨架生成，
-     * 本类只提供「命令参数 → 状态」与「状态 → 消息」两个纯函数。
+     * 装配为功能单元：命令入口 + 三个翻页按钮由 {@link ButtonCommands} 骨架生成，
+     * 本类只提供「命令参数 → 状态」与「上下文 → 消息」两个纯函数。
      */
     @Bean
     BotFeature card(BotReplies replies) {
-        return ButtonFeature.of(ID)
+        return ButtonCommands.of(ID)
                 .commands(COMMAND)          // 入口命令：/card；不匹配的文本一律 IGNORED
                 .state(CardFeature::state)  // 命令参数 → 目标页码状态（null = 参数不成立）
-                .render(CardFeature::page)  // 状态 → 消息：入口与按钮共用，两条路径渲染一致
+                .render(CardFeature::page)  // 上下文 → 消息：入口与按钮共用，两条路径渲染一致
                 .build(replies);
     }
 
@@ -91,9 +92,14 @@ public class CardFeature {
         return page == 0 ? null : Map.of(CardKeyboards.STATE_PAGE, Integer.toString(page));
     }
 
-    /** 状态 → 消息（入口与按钮共用）。 */
-    static SendMessageRequest page(Map<String, String> state) {
-        return page(Integer.parseInt(state.getOrDefault(CardKeyboards.STATE_PAGE, "1")));
+    /**
+     * 上下文 → 消息（入口与按钮共用）。
+     *
+     * <p>需要按人/群差别渲染时从这里取：触发者是 {@code context.userOpenid()}（单聊与群聊同一个值，不必按场景分支），
+     * 群是 {@code context.groupOpenid()}（仅群聊非空）；触发事件本身是 {@code context.event()}。
+     */
+    static SendMessageRequest page(FeatureContext context) {
+        return page(context.intState(CardKeyboards.STATE_PAGE, 1));
     }
 
     /** 翻页键盘发出的动作词（{@code /card next 2} 这种形态）。 */

@@ -9,9 +9,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import love.aira.kohaku.feature.BotFeature;
-import love.aira.kohaku.feature.ButtonContext;
+import love.aira.kohaku.feature.FeatureContext;
 import love.aira.kohaku.feature.ButtonHandler;
-import love.aira.kohaku.feature.InteractionRouter;
+import love.aira.kohaku.interaction.InteractionRouter;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
@@ -168,7 +168,7 @@ class KohakuEventDispatchTest {
                 }
 
                 @Override
-                public HandlerResult onButton(ButtonContext context) {
+                public HandlerResult onButton(FeatureContext context) {
                     try {
                         release.await(5, TimeUnit.SECONDS);
                     } catch (InterruptedException e) {
@@ -215,7 +215,7 @@ class KohakuEventDispatchTest {
                 }
 
                 @Override
-                public HandlerResult onButton(ButtonContext context) {
+                public HandlerResult onButton(FeatureContext context) {
                     clicks.add(Integer.toString(context.intState("p", 1)));
                     return HandlerResult.CONSUMED;
                 }
