@@ -27,3 +27,9 @@ kohaku:
     # auto-start: true
     # reconnect-initial-delay: 1s
     # reconnect-max-delay: 60s
+logging:
+  level:
+    love:
+      aira:
+        kohaku:
+          observer: debug
