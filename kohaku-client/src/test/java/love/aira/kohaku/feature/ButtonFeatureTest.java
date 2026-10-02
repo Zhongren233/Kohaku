@@ -17,6 +17,7 @@ import love.aira.kohaku.config.KohakuConfig;
 import love.aira.kohaku.config.QqIntent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
+import love.aira.kohaku.gateway.event.GroupMessageCreateEvent;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
 import love.aira.kohaku.gateway.event.model.C2cMessage;
 import love.aira.kohaku.gateway.event.model.GroupMessage;
@@ -116,6 +117,17 @@ class ButtonFeatureTest {
                 .contains("\"msg_id\":\"MSG_G\"").contains("# 第 2 页");
     }
 
+    /** 群内全量消息（平台为该群开通「接收全量信息」后下发 GROUP_MESSAGE_CREATE）：入口行为与 @ 消息一致。 */
+    @Test
+    void fullGroupMessageEntryAlsoWorks() {
+        server.stub(GROUP_PATH, 200, SENT);
+
+        assertThat(fullGroupEntry(feature()).handle(fullGroupMessage("/card 2"))).isEqualTo(HandlerResult.CONSUMED);
+
+        assertThat(server.calls(GROUP_PATH).getFirst().body())
+                .contains("\"msg_id\":\"MSG_G\"").contains("# 第 2 页");
+    }
+
     @Test
     void defaultCommandIsSlashId() {
         server.stub(USER_PATH, 200, SENT);      // 假服务按次消费 stub，两次调用要两条
@@ -210,6 +222,14 @@ class ButtonFeatureTest {
                 .orElseThrow();
     }
 
+    @SuppressWarnings("unchecked")
+    private static BotEventHandler<GroupMessageCreateEvent> fullGroupEntry(BotFeature feature) {
+        return (BotEventHandler<GroupMessageCreateEvent>) feature.messageHandlers().stream()
+                .filter(handler -> handler.eventType().equals(GroupMessageCreateEvent.class))
+                .findFirst()
+                .orElseThrow();
+    }
+
     private static ButtonHandler button(BotFeature feature, String action) {
         return feature.buttonHandlers().stream()
                 .filter(handler -> handler.action().equals(action))
@@ -234,6 +254,11 @@ class ButtonFeatureTest {
 
     private static GroupAtMessageCreateEvent groupMessage(String content) {
         return new GroupAtMessageCreateEvent(2, "GROUP_AT_MESSAGE_CREATE:ID", raw(),
+                new GroupMessage("MSG_G", author(), content, "GROUP_OPENID", null, null, null, null, null, null, null));
+    }
+
+    private static GroupMessageCreateEvent fullGroupMessage(String content) {
+        return new GroupMessageCreateEvent(3, "GROUP_MESSAGE_CREATE:ID", raw(),
                 new GroupMessage("MSG_G", author(), content, "GROUP_OPENID", null, null, null, null, null, null, null));
     }
 

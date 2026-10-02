@@ -9,6 +9,7 @@ import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
+import love.aira.kohaku.gateway.event.GroupMessageCreateEvent;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
 import love.aira.kohaku.gateway.handler.HandlerResult;
 import love.aira.kohaku.reply.BotReplies;
@@ -29,8 +30,9 @@ import love.aira.kohaku.reply.BotReplies;
  *
  * <p>框架补齐的部分：
  * <ul>
- *   <li>入口：单聊与群聊两种消息事件各注册一个入口，按命令前缀匹配，不匹配一律 {@code IGNORED}
- *       （不会吃掉别人的命令），命中则用 {@code render(状态)} 被动回复；</li>
+ *   <li>入口：单聊、群内 @机器人、群内全量消息各注册一个入口（全量需平台为该群开通「接收全量信息」，
+ *       否则该事件不会下发），按命令前缀匹配，不匹配一律 {@code IGNORED}（不会吃掉别人的命令），
+ *       命中则用 {@code render(状态)} 被动回复；</li>
  *   <li>按钮：每个动作一个回调，**从按钮 data 的 state 里取状态**再渲染 —— 状态自描述，
  *       所以"点第 3 页"与"发 /card next 3"走同一条渲染路径，重复点击/重放天然幂等；</li>
  *   <li>被动回复走 {@link BotReplies}（目标、msg_id/msg_seq、互动 event_id、超限告警全自动）。</li>
@@ -119,6 +121,8 @@ public final class ButtonFeature {
                     .message(C2cMessageCreateEvent.class,
                             event -> entry(event, event.payload() == null ? null : event.payload().content(), replies))
                     .message(GroupAtMessageCreateEvent.class,
+                            event -> entry(event, event.payload() == null ? null : event.payload().content(), replies))
+                    .message(GroupMessageCreateEvent.class,
                             event -> entry(event, event.payload() == null ? null : event.payload().content(), replies));
             for (String action : buttonActions) {
                 feature.button(action, context -> {
