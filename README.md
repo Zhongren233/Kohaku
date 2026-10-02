@@ -14,20 +14,20 @@ _✨ QQ 机器人开放平台的 Java 客户端 + Spring Boot Starter：引入�
 <dependency>
   <groupId>love.aira</groupId>
   <artifactId>kohaku-spring-boot-starter</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
 ### Gradle Kotlin DSL
 
 ```kotlin
-implementation("love.aira:kohaku-spring-boot-starter:0.1.0")
+implementation("love.aira:kohaku-spring-boot-starter:0.2.0")
 ```
 
 ### Gradle Groovy DSL
 
 ```groovy
-implementation 'love.aira:kohaku-spring-boot-starter:0.1.0'
+implementation 'love.aira:kohaku-spring-boot-starter:0.2.0'
 ```
 
 ## 配置文件

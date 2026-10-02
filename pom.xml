@@ -5,7 +5,7 @@
 
     <groupId>love.aira</groupId>
     <artifactId>kohaku-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.2.0</version>
     <packaging>pom</packaging>
     <name>kohaku</name>
     <description>QQ 机器人 Gateway 长连接与消息接口的 Spring Boot 自动配置</description>
