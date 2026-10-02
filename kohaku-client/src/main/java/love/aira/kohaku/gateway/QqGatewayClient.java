@@ -6,7 +6,6 @@ import java.net.http.WebSocket;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -14,9 +13,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 import love.aira.kohaku.api.AccessTokenProvider;
 import love.aira.kohaku.api.QqGatewayApi;
 import love.aira.kohaku.config.KohakuConfig;
@@ -30,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.NullNode;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -58,10 +54,7 @@ public class QqGatewayClient {
     private static final Logger log = LoggerFactory.getLogger(QqGatewayClient.class);
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(15);
     private static final Duration HELLO_TIMEOUT = Duration.ofSeconds(20);
-    private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(2);
     private static final long DEFAULT_HEARTBEAT_INTERVAL_MS = 45_000;
-    private static final long MAX_BACKOFF_SHIFT = 16;
-    private static final Pattern AUTH_TOKEN = Pattern.compile("(\"token\"\\s*:\\s*\")[^\"]*(\")");
 
     private final KohakuConfig config;
     private final QqGatewayApi gatewayApi;
@@ -78,7 +71,7 @@ public class QqGatewayClient {
     private ScheduledExecutorService scheduler;
 
     /** 当前活跃连接，同时作为丢弃陈旧回调的身份标识。 */
-    private Connection current;
+    private GatewayConnection current;
     private ScheduledFuture<?> heartbeatTask;
     private ScheduledFuture<?> helloWatchdog;
     private String sessionId;
@@ -117,7 +110,7 @@ public class QqGatewayClient {
     }
 
     public void stop() {
-        Connection connection;
+        GatewayConnection connection;
         synchronized (lock) {
             connection = current;
             current = null;
@@ -163,7 +156,7 @@ public class QqGatewayClient {
             return;
         }
 
-        Connection connection = new Connection(resume);
+        GatewayConnection connection = new GatewayConnection(resume, connectionEvents());
         synchronized (lock) {
             if (!running) {
                 return;
@@ -190,9 +183,9 @@ public class QqGatewayClient {
         }
     }
 
-    private void onHelloTimeout(Connection connection) {
+    private void onHelloTimeout(GatewayConnection connection) {
         synchronized (lock) {
-            if (connection != current || connection.helloReceived) {
+            if (connection != current || connection.helloReceived()) {
                 return;
             }
         }
@@ -202,7 +195,7 @@ public class QqGatewayClient {
 
     // ------------------------------------------------------------------ 报文处理
 
-    private void handleText(Connection connection, String text) {
+    private void handleText(GatewayConnection connection, String text) {
         GatewayPayload payload;
         try {
             payload = mapper.readValue(text, GatewayPayload.class);
@@ -211,7 +204,7 @@ public class QqGatewayClient {
             return;
         }
         if (log.isDebugEnabled()) {
-            log.debug("gateway <- {}", redact(text));
+            log.debug("gateway <- {}", GatewayAuthPayload.redact(text));
         }
         switch (payload.op()) {
             case GatewayOp.HELLO -> handleHello(connection, payload);
@@ -219,12 +212,12 @@ public class QqGatewayClient {
             case GatewayOp.RECONNECT -> handleReconnect(connection);
             case GatewayOp.INVALID_SESSION -> handleInvalidSession(connection, payload);
             case GatewayOp.DISPATCH -> handleDispatch(payload);
-            default -> log.warn("ignoring unsupported gateway opcode {}: {}", payload.op(), abbreviate(redact(text)));
+            default -> log.warn("ignoring unsupported gateway opcode {}: {}", payload.op(), abbreviate(GatewayAuthPayload.redact(text)));
         }
     }
 
     /** 服务端要求重连（OpCode 7）：放弃当前连接，保留 session 走 Resume。 */
-    private void handleReconnect(Connection connection) {
+    private void handleReconnect(GatewayConnection connection) {
         log.info("gateway requested reconnect (op {})", GatewayOp.RECONNECT);
         reconnect(connection, "server requested reconnect");
     }
@@ -233,7 +226,7 @@ public class QqGatewayClient {
      * 服务端判定 session 无效（OpCode 9）：{@code d} 为 true 时仍可 Resume，
      * 为 false 表示不能续用 session，须丢弃后重新 Identify。
      */
-    private void handleInvalidSession(Connection connection, GatewayPayload payload) {
+    private void handleInvalidSession(GatewayConnection connection, GatewayPayload payload) {
         boolean resumable = payload.d() != null && payload.d().booleanValue(false);
         if (!resumable) {
             synchronized (lock) {
@@ -245,12 +238,12 @@ public class QqGatewayClient {
         reconnect(connection, "invalid session");
     }
 
-    private void handleHello(Connection connection, GatewayPayload payload) {
+    private void handleHello(GatewayConnection connection, GatewayPayload payload) {
         synchronized (lock) {
             if (connection != current) {
                 return;
             }
-            connection.helloReceived = true;
+            connection.markHelloReceived();
             long interval = payload.d() == null ? 0 : payload.d().path("heartbeat_interval").asLong(0);
             heartbeatIntervalMs = interval > 0 ? interval : DEFAULT_HEARTBEAT_INTERVAL_MS;
             cancel(helloWatchdog);
@@ -259,12 +252,12 @@ public class QqGatewayClient {
             heartbeatTask = scheduler.schedule(() -> heartbeatTick(connection),
                     ThreadLocalRandom.current().nextLong(heartbeatIntervalMs + 1), TimeUnit.MILLISECONDS);
             log.info("gateway HELLO received (heartbeat {} ms), authenticating via {}",
-                    heartbeatIntervalMs, connection.resume ? "RESUME" : "IDENTIFY");
+                    heartbeatIntervalMs, connection.resume() ? "RESUME" : "IDENTIFY");
             send(connection, authPayload(connection));
         }
     }
 
-    private void heartbeatTick(Connection connection) {
+    private void heartbeatTick(GatewayConnection connection) {
         synchronized (lock) {
             if (connection != current || !running) {
                 return;
@@ -288,7 +281,7 @@ public class QqGatewayClient {
         }
     }
 
-    private void handleHeartbeatAck(Connection connection) {
+    private void handleHeartbeatAck(GatewayConnection connection) {
         synchronized (lock) {
             if (connection != current) {
                 return;
@@ -343,7 +336,7 @@ public class QqGatewayClient {
 
     // ------------------------------------------------------------------ 断开与重连
 
-    private void handleClosed(Connection connection, int code, String reason) {
+    private void handleClosed(GatewayConnection connection, int code, String reason) {
         synchronized (lock) {
             if (connection != current) {
                 return;
@@ -375,7 +368,7 @@ public class QqGatewayClient {
     }
 
     /** 主动放弃当前连接（心跳超时、Hello 超时），保留 session 以便 Resume。 */
-    private void reconnect(Connection connection, String reason) {
+    private void reconnect(GatewayConnection connection, String reason) {
         synchronized (lock) {
             if (connection != current) {
                 return;
@@ -409,16 +402,12 @@ public class QqGatewayClient {
     }
 
     private long nextBackoffMillis() {
-        long base = Math.max(1, config.reconnectInitialDelay().toMillis());
-        long max = Math.max(base, config.reconnectMaxDelay().toMillis());
-        long ceiling = Math.min(max, base << Math.min(reconnectAttempt, MAX_BACKOFF_SHIFT));
-        reconnectAttempt++;
-        long spread = Math.max(1, ceiling / 5);
-        return Math.min(max, ceiling - spread + ThreadLocalRandom.current().nextLong(2 * spread));
+        return GatewayBackoff.nextDelayMillis(reconnectAttempt++, config.reconnectInitialDelay().toMillis(),
+                config.reconnectMaxDelay().toMillis());
     }
 
     private boolean resumable() {
-        return sessionId != null && lastSeq != null;
+        return GatewayBackoff.resumable(sessionId, lastSeq);
     }
 
     private void halt() {
@@ -435,37 +424,22 @@ public class QqGatewayClient {
 
     // ------------------------------------------------------------------ 下行报文
 
-    private ObjectNode authPayload(Connection connection) {
-        ObjectNode data = mapper.createObjectNode();
-        data.put("token", tokens.authorization());
-        if (connection.resume) {
-            data.put("session_id", sessionId);
-            data.put("seq", lastSeq);
-        } else {
-            data.put("intents", config.intentsMask());
-            ArrayNode shard = data.putArray("shard");
-            shard.add(config.shardIndex());
-            shard.add(config.shardTotal());
-            ObjectNode client = data.putObject("properties");
-            client.put("$os", System.getProperty("os.name", "unknown"));
-            client.put("$browser", config.clientName());
-            client.put("$device", config.clientName());
-        }
-        ObjectNode payload = mapper.createObjectNode();
-        payload.put("op", connection.resume ? GatewayOp.RESUME : GatewayOp.IDENTIFY);
-        payload.set("d", data);
-        return payload;
+    private ObjectNode authPayload(GatewayConnection connection) {
+        String token = tokens.authorization();
+        return connection.resume()
+                ? GatewayAuthPayload.resume(mapper, token, sessionId, lastSeq)
+                : GatewayAuthPayload.identify(mapper, config, token);
     }
 
-    private void send(Connection connection, ObjectNode payload) {
-        WebSocket socket = connection.webSocket;
+    private void send(GatewayConnection connection, ObjectNode payload) {
+        WebSocket socket = connection.socket();
         if (socket == null) {
             log.warn("cannot send op {}: connection is not open", payload.path("op").asInt());
             return;
         }
         String text = mapper.writeValueAsString(payload);
         if (log.isDebugEnabled()) {
-            log.debug("gateway -> {}", redact(text));
+            log.debug("gateway -> {}", GatewayAuthPayload.redact(text));
         }
         socket.sendText(text, true).whenComplete((sent, error) -> {
             if (error != null) {
@@ -525,91 +499,22 @@ public class QqGatewayClient {
         return text.length() <= 256 ? text : text.substring(0, 256) + "...";
     }
 
-    /** 日志脱敏：Identify/Resume 报文携带 AccessToken，不得落盘。 */
-    private static String redact(String json) {
-        return AUTH_TOKEN.matcher(json).replaceAll("$1***$2");
-    }
-
-    /**
-     * 单条 WebSocket 连接。持有自身 socket 引用，避免与后续连接互相干扰；
-     * {@link #terminate()} 保证 onError / onClose / 连接失败三条路径只触发一次关闭处理。
-     */
-    private final class Connection implements WebSocket.Listener {
-
-        private final boolean resume;
-        private final AtomicBoolean terminated = new AtomicBoolean();
-        private final StringBuilder buffer = new StringBuilder();
-        private volatile WebSocket webSocket;
-        private volatile boolean helloReceived;
-
-        private Connection(boolean resume) {
-            this.resume = resume;
-        }
-
-        @Override
-        public void onOpen(WebSocket webSocket) {
-            this.webSocket = webSocket;
-            log.debug("gateway websocket established, awaiting HELLO");
-            webSocket.request(1);
-        }
-
-        @Override
-        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-            buffer.append(data);
-            if (last) {
-                String text = buffer.toString();
-                buffer.setLength(0);
+    /** 连接事件回调：完整报文交给 {@link #handleText}，关闭交给 {@link #handleClosed}。 */
+    private GatewayConnection.Events connectionEvents() {
+        return new GatewayConnection.Events() {
+            @Override
+            public void onMessage(GatewayConnection connection, String text) {
                 try {
-                    handleText(this, text);
+                    handleText(connection, text);
                 } catch (RuntimeException e) {
                     log.error("failed to handle gateway payload: {}", abbreviate(text), e);
                 }
             }
-            webSocket.request(1);
-            return null;
-        }
 
-        @Override
-        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-            if (terminate()) {
-                handleClosed(this, statusCode, reason);
+            @Override
+            public void onClosed(GatewayConnection connection, int code, String reason) {
+                handleClosed(connection, code, reason);
             }
-            return null;
-        }
-
-        @Override
-        public void onError(WebSocket webSocket, Throwable error) {
-            log.warn("gateway websocket error: {}", error.toString());
-            webSocket.abort();
-            if (terminate()) {
-                handleClosed(this, GatewayCloseCode.ABNORMAL, error.toString());
-            }
-        }
-
-        private boolean terminate() {
-            return terminated.compareAndSet(false, true);
-        }
-
-        private void abort() {
-            WebSocket socket = webSocket;
-            if (socket != null) {
-                socket.abort();
-            }
-        }
-
-        private void closeGracefully() {
-            WebSocket socket = webSocket;
-            if (socket == null) {
-                return;
-            }
-            try {
-                socket.sendClose(WebSocket.NORMAL_CLOSURE, "shutdown").get(CLOSE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                socket.abort();
-            } catch (Exception e) {
-                socket.abort();
-            }
-        }
+        };
     }
 }
