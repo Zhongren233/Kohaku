@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  * 示例功能：{@code /todo} 命令 + 子命令 {@code add}/{@code list}/{@code done}。
  *
  * <p>演示「一个命令词下挂多个子命令、各自行为不同」的写法：子命令就是 {@link CommandArgs} 的
- * **第一个参数**，用 {@code tail()} 把它提升为新的命令词后递归分派，因此 {@code /todo add 买菜}
+ * **第一个参数**，用 {@link CommandArgs#tail()} 把它提升为新的命令词后递归分派，因此 {@code /todo add 买菜}
  * 与二级、三级子命令是同一段逻辑。子命令各自渲染、不共用一条「状态 → 消息」管线，所以直接用
  * {@link BotFeature} 装配；若子命令共享同一次渲染（如翻页），用
  * {@link love.aira.kohaku.feature.ButtonFeature} 更轻（见 {@code CardFeature}）。
@@ -53,7 +53,7 @@ public class TodoFeature {
         if (root == null || !COMMAND.equals(root.command())) {
             return HandlerResult.IGNORED;
         }
-        CommandArgs sub = tail(root);
+        CommandArgs sub = root.tail();
         if (sub == null) {
             replies.text(event, HELP);
             return HandlerResult.CONSUMED;
@@ -67,18 +67,6 @@ public class TodoFeature {
                 yield HandlerResult.CONSUMED;
             }
         };
-    }
-
-    /**
-     * 去掉命令词，把第一个参数提升为新的命令词；没有参数时返回 {@code null}。
-     *
-     * <p>{@code /todo add 买菜} → {@code command="add", args=["买菜"]}，再 {@code tail()} 即可继续下钻。
-     */
-    private static CommandArgs tail(CommandArgs args) {
-        if (args.isEmpty()) {
-            return null;
-        }
-        return new CommandArgs(args.at(0), args.args().subList(1, args.args().size()));
     }
 
     /** {@code /todo add 买菜 和 牛奶} → 新增一条「买菜 和 牛奶」。 */

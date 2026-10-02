@@ -65,4 +65,19 @@ public record CommandArgs(String command, List<String> args) {
             return defaultValue;
         }
     }
+
+    /**
+     * 去掉当前命令词，把第一个参数提升为新的命令词（子命令分派，可逐级递归）。
+     *
+     * <p>{@code parse("/todo add 买菜").tail()} → {@code command="add", args=["买菜"]}；
+     * 对 {@code /admin user add alice} 连续 {@code tail()} 两次即得到 {@code add alice}。
+     *
+     * @return 新的 {@code CommandArgs}；没有参数时返回 {@code null}
+     */
+    public CommandArgs tail() {
+        if (args.isEmpty()) {
+            return null;
+        }
+        return new CommandArgs(args.getFirst(), args.subList(1, args.size()));
+    }
 }
