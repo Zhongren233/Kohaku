@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
  *
  * <ul>
  *   <li>非按钮互动事件（快捷菜单/反馈/授权等）：返回 {@code IGNORED}，交给链上其他处理器；</li>
- *   <li>按钮 data 无法解析、功能或动作未注册：返回 {@code IGNORED}（会继续走链并最终落到 @EventListener）；</li>
+ *   <li>按钮 data 无法解析、功能或动作未注册：返回 {@code IGNORED}（继续走链；无论是否被消费，事件都会到达 @EventListener）；</li>
  *   <li>命中：返回该按钮处理器的结果（CONSUMED 即终止整条链）。</li>
  * </ul>
  *

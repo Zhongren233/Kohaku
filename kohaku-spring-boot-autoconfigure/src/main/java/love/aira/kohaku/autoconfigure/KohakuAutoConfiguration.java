@@ -153,8 +153,8 @@ public class KohakuAutoConfiguration {
 
     /**
      * 事件处理链：先按 {@code kohaku.qq.handler-order} 声明的 Bean 名称顺序，其余按 {@code @Order}/{@code Ordered}，
-     * 最后追加各功能自带的入口处理器；处理器返回 CONSUMED 即终止，全部 IGNORED 时事件落到兜底消费者 ——
-     * 发布为容器事件供 {@code @EventListener} 使用。
+     * 最后追加各功能自带的入口处理器；处理器返回 CONSUMED 只终止链内后续处理器。
+     * 无论事件是否被消费，都会作为容器事件发布，供 {@code @EventListener} 观察（观察者通道）。
      */
     @Bean
     @ConditionalOnMissingBean

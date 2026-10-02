@@ -32,7 +32,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Spring 侧事件处理链：处理器 Bean 的收集与排序、CONSUMED 终止、未消费事件落到 @EventListener。 */
+/** Spring 侧事件处理链：处理器 Bean 的收集与排序、CONSUMED 只终止链，事件无条件发布给 @EventListener。 */
 class KohakuEventDispatchTest {
 
     private static final List<String> CALLS = new CopyOnWriteArrayList<>();
@@ -50,7 +50,7 @@ class KohakuEventDispatchTest {
 
     @Test
     void collectsHandlerBeansAndConsumedEventStopsChain() {
-        runner.withUserConfiguration(ConsumingAndIgnoringHandlers.class, FallbackRecorderConfiguration.class)
+        runner.withUserConfiguration(ConsumingAndIgnoringHandlers.class, ObserverRecorderConfiguration.class)
                 .run(context -> {
                     EventDispatcher dispatcher = context.getBean(EventDispatcher.class);
                     assertThat(dispatcher.handlers()).extracting(handler -> handler.getClass().getSimpleName())
@@ -60,25 +60,25 @@ class KohakuEventDispatchTest {
                     dispatcher.dispatch(c2c());
 
                     assertThat(CALLS).containsExactly("consuming");                 // 消费后不再执行第二个
-                    assertThat(context.getBean(FallbackRecorder.class).received).isEmpty();   // 也不再发布容器事件
+                    assertThat(context.getBean(ObserverRecorder.class).received).hasSize(1);  // 但观察者仍收到
                 });
     }
 
     @Test
     void ignoredEventReachesEventListeners() {
-        runner.withUserConfiguration(IgnoringHandlers.class, FallbackRecorderConfiguration.class).run(context -> {
+        runner.withUserConfiguration(IgnoringHandlers.class, ObserverRecorderConfiguration.class).run(context -> {
             EventDispatcher dispatcher = context.getBean(EventDispatcher.class);
             dispatcher.dispatch(c2c());
 
             assertThat(CALLS).containsExactly("alpha", "beta");     // 全部忽略 → 顺序执行完
-            assertThat(context.getBean(FallbackRecorder.class).received).hasSize(1);    // 兜底发布
+            assertThat(context.getBean(ObserverRecorder.class).received).hasSize(1);    // 观察者收到
         });
     }
 
     @Test
     void handlerOrderPropertyOverridesSpringOrder() {
         runner.withPropertyValues("kohaku.qq.handler-order=betaHandler,alphaHandler")
-                .withUserConfiguration(IgnoringHandlers.class, FallbackRecorderConfiguration.class)
+                .withUserConfiguration(IgnoringHandlers.class, ObserverRecorderConfiguration.class)
                 .run(context -> {
                     assertThat(context.getBean(EventDispatcher.class).handlers())
                             .extracting(handler -> handler.getClass().getSimpleName())
@@ -103,7 +103,7 @@ class KohakuEventDispatchTest {
 
     @Test
     void routesButtonClicksToFeatureBeanAndMergesItsMessageHandlers() {
-        runner.withUserConfiguration(DemoFeatureConfiguration.class, FallbackRecorderConfiguration.class)
+        runner.withUserConfiguration(DemoFeatureConfiguration.class, ObserverRecorderConfiguration.class)
                 .run(context -> {
                     assertThat(context.getBean(InteractionRouter.class).features())
                             .extracting(BotFeature::id).contains("demo");
@@ -114,7 +114,7 @@ class KohakuEventDispatchTest {
                     // 处理器在 kohakuHandlerExecutor 上异步执行，等它跑完
                     await().atMost(Duration.ofSeconds(5))
                             .untilAsserted(() -> assertThat(feature.clicks).containsExactly("2"));   // 点击回到所属功能
-                    assertThat(context.getBean(FallbackRecorder.class).received).isEmpty();   // 已消费，不再发布
+                    assertThat(context.getBean(ObserverRecorder.class).received).hasSize(1);  // 已消费，但观察者仍收到按钮事件
                 });
     }
 
@@ -286,8 +286,8 @@ class KohakuEventDispatchTest {
         }
     }
 
-    /** 未被处理链消费的事件会作为容器事件到达这里。 */
-    static class FallbackRecorder {
+    /** 观察者通道：每个网关事件都会到达这里（含被处理链消费的事件）。 */
+    static class ObserverRecorder {
 
         final List<BotEvent> received = new CopyOnWriteArrayList<>();
 
@@ -321,10 +321,10 @@ class KohakuEventDispatchTest {
         }
     }
 
-    static class FallbackRecorderConfiguration {
+    static class ObserverRecorderConfiguration {
         @Bean
-        FallbackRecorder fallbackRecorder() {
-            return new FallbackRecorder();
+        ObserverRecorder observerRecorder() {
+            return new ObserverRecorder();
         }
     }
 }

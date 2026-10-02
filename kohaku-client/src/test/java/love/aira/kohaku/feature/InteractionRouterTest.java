@@ -207,14 +207,14 @@ class InteractionRouterTest {
 
     @Test
     void playsWellWithDispatcherChain() {
-        List<BotEvent> fallback = new ArrayList<>();
-        EventDispatcher dispatcher = new EventDispatcher(List.of(router), fallback::add);
+        List<BotEvent> observed = new ArrayList<>();
+        EventDispatcher dispatcher = new EventDispatcher(List.of(router), observed::add);
 
-        dispatcher.dispatch(click("card:next:p=2", 11, 2, "USER", null));   // 命中 → 消费
-        dispatcher.dispatch(click("other:next:p=2", 11, 2, "USER", null));  // 未命中 → 兜底
+        dispatcher.dispatch(click("card:next:p=2", 11, 2, "USER", null));   // 命中 → 链在此终止
+        dispatcher.dispatch(click("other:next:p=2", 11, 2, "USER", null));  // 未命中 → 继续走链
 
         assertThat(card.handled).hasSize(1);
-        assertThat(fallback).hasSize(1);
+        assertThat(observed).hasSize(2);   // 无论是否被消费，观察者都收到
     }
 
     private static ButtonHandler actionHandler(String action) {

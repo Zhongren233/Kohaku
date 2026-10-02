@@ -16,7 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 class EventDispatcherTest {
 
     private final List<String> calls = new ArrayList<>();
-    private final List<BotEvent> fallback = new ArrayList<>();
+    private final List<BotEvent> observed = new ArrayList<>();
 
     private static C2cMessageCreateEvent c2c() {
         return new C2cMessageCreateEvent(1, "C2C_MESSAGE_CREATE:ID", new JsonMapper().readTree("{}"),
@@ -46,30 +46,52 @@ class EventDispatcherTest {
     @Test
     void executesHandlersInDeclaredOrderAndContinuesOnIgnored() {
         new EventDispatcher(List.of(c2cHandler("first", HandlerResult.IGNORED),
-                c2cHandler("second", HandlerResult.IGNORED)), fallback::add)
+                c2cHandler("second", HandlerResult.IGNORED)), observed::add)
                 .dispatch(c2c());
 
         assertThat(calls).containsExactly("first", "second");
-        assertThat(fallback).hasSize(1);   // 全部忽略 → 交给兜底
+        assertThat(observed).hasSize(1);   // 全部忽略 → 观察者同样收到
     }
 
     @Test
     void stopsAtFirstConsumedHandler() {
         new EventDispatcher(List.of(c2cHandler("first", HandlerResult.CONSUMED),
-                c2cHandler("second", HandlerResult.IGNORED)), fallback::add)
+                c2cHandler("second", HandlerResult.IGNORED)), observed::add)
                 .dispatch(c2c());
 
-        assertThat(calls).containsExactly("first");
-        assertThat(fallback).isEmpty();    // 已消费 → 不兜底
+        assertThat(calls).containsExactly("first");   // 消费终止链内后续处理器
+        assertThat(observed).hasSize(1);              // 但观察者仍收到
+    }
+
+    @Test
+    void observerRunsAfterChain() {
+        new EventDispatcher(List.of(c2cHandler("first", HandlerResult.CONSUMED),
+                c2cHandler("second", HandlerResult.IGNORED)), event -> calls.add("observer"))
+                .dispatch(c2c());
+
+        assertThat(calls).containsExactly("first", "observer");   // 消费只终止链，观察者仍在链后执行
+    }
+
+    @Test
+    void observerReceivesEveryEventInOrder() {
+        EventDispatcher dispatcher = new EventDispatcher(
+                List.of(c2cHandler("consumer", HandlerResult.CONSUMED)), observed::add);
+
+        C2cMessageCreateEvent first = c2c();
+        C2cMessageCreateEvent second = c2c();
+        dispatcher.dispatch(first);
+        dispatcher.dispatch(second);
+
+        assertThat(observed).containsExactly(first, second);   // 无条件、按事件先后顺序
     }
 
     @Test
     void skipsHandlersWhoseTypeDoesNotMatch() {
         GroupAtMessageCreateEvent event = group();
-        new EventDispatcher(List.of(c2cHandler("c2c", HandlerResult.CONSUMED)), fallback::add).dispatch(event);
+        new EventDispatcher(List.of(c2cHandler("c2c", HandlerResult.CONSUMED)), observed::add).dispatch(event);
 
         assertThat(calls).isEmpty();
-        assertThat(fallback).containsExactly(event);
+        assertThat(observed).containsExactly(event);
     }
 
     @Test
@@ -108,21 +130,21 @@ class EventDispatcherTest {
             }
         };
 
-        new EventDispatcher(List.of(broken, c2cHandler("after", HandlerResult.CONSUMED)), fallback::add).dispatch(c2c());
+        new EventDispatcher(List.of(broken, c2cHandler("after", HandlerResult.CONSUMED)), observed::add).dispatch(c2c());
 
         assertThat(calls).containsExactly("broken", "after");   // 异常后继续执行下一个
-        assertThat(fallback).isEmpty();                          // 后续处理器消费了它
+        assertThat(observed).hasSize(1);                         // 链异常/消费都不影响观察者
     }
 
     @Test
-    void withoutHandlersEverythingFallsBack() {
-        new EventDispatcher(List.of(), fallback::add).dispatch(c2c());
+    void withoutHandlersObserverStillReceives() {
+        new EventDispatcher(List.of(), observed::add).dispatch(c2c());
 
-        assertThat(fallback).hasSize(1);
+        assertThat(observed).hasSize(1);
     }
 
     @Test
-    void withoutFallbackConsumedAndIgnoredBothEndSilently() {
+    void withoutObserverConsumedAndIgnoredBothEndSilently() {
         new EventDispatcher(List.of(c2cHandler("only", HandlerResult.IGNORED))).dispatch(c2c());
 
         assertThat(calls).containsExactly("only");
