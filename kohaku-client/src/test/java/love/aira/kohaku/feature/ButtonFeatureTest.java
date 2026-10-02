@@ -72,10 +72,7 @@ class ButtonFeatureTest {
     private BotFeature feature() {
         return ButtonFeature.of("card")
                 .commands("/card")
-                .state(text -> {
-                    int page = text.length() > 6 ? Integer.parseInt(text.substring(6).trim()) : 1;
-                    return Map.of("p", Integer.toString(page));
-                })
+                .state(args -> Map.of("p", Integer.toString(args.isEmpty() ? 1 : args.intAt(0, 1))))
                 .render(state -> {
                     rendered.add(state);
                     return SendMessageRequest.markdown("# 第 " + state.get("p") + " 页");
@@ -92,6 +89,16 @@ class ButtonFeatureTest {
         assertThat(rendered).containsExactly(Map.of("p", "3"));
         assertThat(server.calls(USER_PATH).getFirst().body())
                 .contains("\"msg_id\":\"MSG_1\"").contains("# 第 3 页");
+    }
+
+    /** 命令词与参数可用任意空白分隔：匹配与切分共用同一次分词，不再有「字面空格」分叉。 */
+    @Test
+    void acceptsAnyWhitespaceBetweenCommandAndArguments() {
+        server.stub(USER_PATH, 200, SENT);
+
+        assertThat(c2cEntry(feature()).handle(c2cMessage("/card\t3"))).isEqualTo(HandlerResult.CONSUMED);
+
+        assertThat(rendered).containsExactly(Map.of("p", "3"));
     }
 
     @Test
@@ -156,7 +163,7 @@ class ButtonFeatureTest {
         server.stub(USER_PATH, 200, SENT);      // 假服务按次消费 stub，两次调用要两条
         server.stub(USER_PATH, 200, SENT);
         BotFeature feature = ButtonFeature.of("vote")
-                .state(text -> Map.of("q", "1"))
+                .state(args -> Map.of("q", "1"))
                 .render(state -> SendMessageRequest.text("投票"))
                 .build(replies);
 
@@ -189,7 +196,7 @@ class ButtonFeatureTest {
     @Test
     void customActionsReplaceDefaults() {
         BotFeature feature = ButtonFeature.of("vote")
-                .state(text -> Map.of("q", "1"))
+                .state(args -> Map.of("q", "1"))
                 .render(state -> SendMessageRequest.text("投票"))
                 .actions("yes", "no")
                 .build(replies);
@@ -202,7 +209,7 @@ class ButtonFeatureTest {
         assertThatThrownBy(() -> ButtonFeature.of("vote").render(state -> SendMessageRequest.text("x")).build(replies))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("state");
-        assertThatThrownBy(() -> ButtonFeature.of("vote").state(text -> Map.of()).build(replies))
+        assertThatThrownBy(() -> ButtonFeature.of("vote").state(args -> Map.of()).build(replies))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("render");
         assertThatThrownBy(() -> ButtonFeature.of("bad id"))
@@ -211,6 +218,9 @@ class ButtonFeatureTest {
         assertThatThrownBy(() -> ButtonFeature.of("vote").commands("   "))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("命令前缀");
+        assertThatThrownBy(() -> ButtonFeature.of("vote").commands("/a b"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("空白");
         assertThatThrownBy(() -> ButtonFeature.of("vote").actions())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("按钮动作");
@@ -220,7 +230,7 @@ class ButtonFeatureTest {
     @Test
     void renderReturningNullFailsLoudlyInsteadOfSilentlyIgnoring() {
         BotFeature feature = ButtonFeature.of("vote")
-                .state(text -> Map.of("q", "1"))
+                .state(args -> Map.of("q", "1"))
                 .render(state -> null)
                 .build(replies);
 

@@ -6,6 +6,7 @@ import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.feature.BotFeature;
 import love.aira.kohaku.feature.ButtonFeature;
 import love.aira.kohaku.reply.BotReplies;
+import love.aira.kohaku.support.CommandArgs;
 import love.aira.kohaku.support.Pagination;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
@@ -69,21 +70,25 @@ public class CardFeature {
 
     /**
      * 装配为功能单元：命令入口 + 三个翻页按钮由 {@link ButtonFeature} 骨架生成，
-     * 本类只提供「文本 → 状态」与「状态 → 消息」两个纯函数。
+     * 本类只提供「命令参数 → 状态」与「状态 → 消息」两个纯函数。
      */
     @Bean
     BotFeature card(BotReplies replies) {
         return ButtonFeature.of(ID)
                 .commands(COMMAND)          // 入口命令：/card；不匹配的文本一律 IGNORED
-                .state(CardFeature::state)  // 文本 → 目标页码状态（null = 不是本功能的命令）
+                .state(CardFeature::state)  // 命令参数 → 目标页码状态（null = 参数不成立）
                 .render(CardFeature::page)  // 状态 → 消息：入口与按钮共用，两条路径渲染一致
                 .build(replies);
     }
 
-    /** 命令文本 → 按钮状态（只放渲染需要的页码）；不是本功能的命令返回 {@code null}。 */
-    static Map<String, String> state(String content) {
-        int target = requestedPage(content);
-        return target == 0 ? null : Map.of(CardKeyboards.STATE_PAGE, Integer.toString(target));
+    /** 命令参数 → 按钮状态（只放渲染需要的页码）；参数不成立时返回 {@code null}。 */
+    static Map<String, String> state(CommandArgs args) {
+        int page = switch (args.size()) {
+            case 0 -> 1;                                                  // /card
+            case 1 -> args.intAt(0, 0);                                   // /card 3
+            default -> isAction(args.at(0)) ? args.intAt(1, 0) : 0;       // /card next 2（指令按钮点击后的形态）
+        };
+        return page == 0 ? null : Map.of(CardKeyboards.STATE_PAGE, Integer.toString(page));
     }
 
     /** 状态 → 消息（入口与按钮共用）。 */
@@ -91,43 +96,9 @@ public class CardFeature {
         return page(Integer.parseInt(state.getOrDefault(CardKeyboards.STATE_PAGE, "1")));
     }
 
-    /** {@code /card} 或 {@code /card next 2} 等命令返回目标页码；不是本功能的命令返回 0。 */
-    static int requestedPage(String content) {
-        if (content == null) {
-            return 0;
-        }
-        String trimmed = content.trim();
-        if (!isCommand(trimmed)) {
-            return 0;
-        }
-        String[] parts = trimmed.split("\\s+");
-        if (parts.length == 1) {
-            return 1;                                        // /card
-        }
-        if (parts.length == 2) {
-            return parsePage(parts[1]);                       // /card 3
-        }
-        if (!CardKeyboards.ACTION_NEXT.equals(parts[1]) && !CardKeyboards.ACTION_PREV.equals(parts[1])
-                && !CardKeyboards.ACTION_PAGE.equals(parts[1])) {
-            return 0;
-        }
-        return parsePage(parts[2]);                            // /card next 2（指令按钮点击后的形态）
-    }
-
-    private static int parsePage(String text) {
-        try {
-            return Integer.parseInt(text.trim());
-        } catch (NumberFormatException e) {
-            return 0;
-        }
-    }
-
-    /** {@code /card} 或 {@code /card 3} 都算本功能的命令。 */
-    static boolean isCommand(String content) {
-        if (content == null) {
-            return false;
-        }
-        String trimmed = content.trim();
-        return trimmed.equals(COMMAND) || trimmed.startsWith(COMMAND + " ");
+    /** 翻页键盘发出的动作词（{@code /card next 2} 这种形态）。 */
+    private static boolean isAction(String action) {
+        return CardKeyboards.ACTION_NEXT.equals(action) || CardKeyboards.ACTION_PREV.equals(action)
+                || CardKeyboards.ACTION_PAGE.equals(action);
     }
 }

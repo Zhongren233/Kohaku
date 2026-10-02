@@ -24,6 +24,7 @@ import love.aira.kohaku.gateway.event.model.MessageAuthor;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
 import love.aira.kohaku.gateway.handler.HandlerResult;
 import love.aira.kohaku.reply.BotReplies;
+import love.aira.kohaku.support.CommandArgs;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.json.JsonMapper;
@@ -120,16 +121,15 @@ class CardFeatureTest {
     }
 
     @Test
-    void recognizesCommandWithArguments() {
-        assertThat(CardFeature.requestedPage("/card")).isEqualTo(1);
-        assertThat(CardFeature.requestedPage("/card next 3")).isEqualTo(3);
-        assertThat(CardFeature.requestedPage("/card 2")).isEqualTo(2);
-        assertThat(CardFeature.requestedPage("/card bogus 2")).isZero();
-        assertThat(CardFeature.requestedPage("你好")).isZero();
-        assertThat(CardFeature.isCommand("/card")).isTrue();
-        assertThat(CardFeature.isCommand("  /card 3 ")).isTrue();
-        assertThat(CardFeature.isCommand("/cards")).isFalse();
-        assertThat(CardFeature.isCommand(null)).isFalse();
+    void parsesCommandArguments() {
+        assertThat(CardFeature.state(CommandArgs.parse("/card"))).containsEntry("p", "1");
+        assertThat(CardFeature.state(CommandArgs.parse("/card 2"))).containsEntry("p", "2");
+        assertThat(CardFeature.state(CommandArgs.parse("/card next 3"))).containsEntry("p", "3");
+        assertThat(CardFeature.state(CommandArgs.parse("/card prev 1"))).containsEntry("p", "1");
+        assertThat(CardFeature.state(CommandArgs.parse("/card\tpage 2"))).containsEntry("p", "2");   // 任意空白
+        assertThat(CardFeature.state(CommandArgs.parse("/card bogus 2"))).isNull();
+        assertThat(CardFeature.state(CommandArgs.parse("/card 0"))).isNull();
+        assertThat(CardFeature.state(CommandArgs.parse("/card next"))).isNull();
     }
 
     @SuppressWarnings("unchecked")

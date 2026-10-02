@@ -1,9 +1,11 @@
 package love.aira.kohaku.feature;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.gateway.event.BotEvent;
@@ -14,6 +16,7 @@ import love.aira.kohaku.gateway.event.model.GroupMessage;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
 import love.aira.kohaku.gateway.handler.HandlerResult;
 import love.aira.kohaku.reply.BotReplies;
+import love.aira.kohaku.support.CommandArgs;
 import love.aira.kohaku.support.Mentions;
 
 /**
@@ -24,7 +27,7 @@ import love.aira.kohaku.support.Mentions;
  * @Bean
  * BotFeature card(BotReplies replies) {
  *     return ButtonFeature.of("card")                            // 默认入口命令 = /card
- *             .state(CardFeature::state)                          // 文本 → 状态；null 表示"不是我的命令"
+ *             .state(CardFeature::state)                          // 命令参数 → 状态；null 表示参数不成立
  *             .render(CardFeature::page)                          // 状态 → 消息（入口与按钮共用）
  *             .build(replies);                                    // 默认动作 next/prev/page
  * }
@@ -59,9 +62,9 @@ public final class ButtonFeature {
     public static final class Builder {
 
         private final String featureId;
-        private final List<String> commands = new ArrayList<>();
+        private final Set<String> commands = new LinkedHashSet<>();
         private final List<String> actions = new ArrayList<>(DEFAULT_ACTIONS);
-        private Function<String, Map<String, String>> stateParser;
+        private Function<CommandArgs, Map<String, String>> stateParser;
         private Function<Map<String, String>, SendMessageRequest> renderer;
 
         private Builder(String featureId) {
@@ -70,14 +73,22 @@ public final class ButtonFeature {
             this.featureId = featureId;
         }
 
-        /** 入口命令前缀（默认 {@code /<featureId>}）；文本等于前缀或以「前缀 + 空格」开头才算命中。 */
+        /**
+         * 入口命令词（默认 {@code /<featureId>}）：与消息的**第一个分词**精确相等才算命中。
+         *
+         * <p>命令词必须是单个词（不含空白）；命中后框架把剩余参数交给 {@link #state(Function)} 的解析器。
+         */
         public Builder commands(String... prefixes) {
             commands.clear();
             for (String prefix : prefixes) {
-                if (prefix == null || prefix.isBlank()) {
+                String command = prefix == null ? null : prefix.trim();
+                if (command == null || command.isEmpty()) {
                     throw new IllegalArgumentException("命令前缀不能为空");
                 }
-                commands.add(prefix.trim());
+                if (command.chars().anyMatch(Character::isWhitespace)) {
+                    throw new IllegalArgumentException("命令前缀不能包含空白: " + command);
+                }
+                commands.add(command);
             }
             if (commands.isEmpty()) {
                 throw new IllegalArgumentException("至少要有一个命令前缀");
@@ -85,8 +96,13 @@ public final class ButtonFeature {
             return this;
         }
 
-        /** 文本 → 按钮状态（{@link ButtonData} 的 state 键值）；返回 {@code null} 表示不是本功能的命令。 */
-        public Builder state(Function<String, Map<String, String>> parser) {
+        /**
+         * 命令参数 → 按钮状态（{@link ButtonData} 的 state 键值）。
+         *
+         * <p>命令词已由框架匹配并剥离，这里只处理 {@link CommandArgs} 中的参数；返回 {@code null} 或空 Map
+         * 表示参数不构成有效状态（按 IGNORED 处理）。
+         */
+        public Builder state(Function<CommandArgs, Map<String, String>> parser) {
             this.stateParser = Objects.requireNonNull(parser, "state");
             return this;
         }
@@ -112,12 +128,11 @@ public final class ButtonFeature {
 
         public BotFeature build(BotReplies replies) {
             Objects.requireNonNull(replies, "replies");
-            Objects.requireNonNull(stateParser, "state（文本 → 状态）");
+            Objects.requireNonNull(stateParser, "state（命令参数 → 状态）");
             Objects.requireNonNull(renderer, "render（状态 → 消息）");
             if (commands.isEmpty()) {
                 commands.add("/" + featureId);
             }
-            List<String> commandPrefixes = List.copyOf(commands);
             List<String> buttonActions = List.copyOf(actions);
 
             BotFeature.Builder feature = BotFeature.of(featureId)
@@ -146,25 +161,16 @@ public final class ButtonFeature {
         }
 
         private HandlerResult entry(BotEvent event, String content, BotReplies replies) {
-            if (content == null || !matchesAny(content)) {
+            CommandArgs command = CommandArgs.parse(content);
+            if (command == null || !commands.contains(command.command())) {
                 return HandlerResult.IGNORED;   // 不是本功能的命令，交给后面的处理器
             }
-            Map<String, String> state = stateParser.apply(content);
+            Map<String, String> state = stateParser.apply(command);
             if (state == null || state.isEmpty()) {
                 return HandlerResult.IGNORED;
             }
             replies.send(event, render(state));
             return HandlerResult.CONSUMED;
-        }
-
-        private boolean matchesAny(String content) {
-            String trimmed = content.trim();
-            for (String prefix : commands) {
-                if (trimmed.equals(prefix) || trimmed.startsWith(prefix + " ")) {
-                    return true;
-                }
-            }
-            return false;
         }
 
         private SendMessageRequest render(Map<String, String> state) {
