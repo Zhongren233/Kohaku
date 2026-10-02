@@ -10,9 +10,11 @@ import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupMessageCreateEvent;
+import love.aira.kohaku.gateway.event.model.GroupMessage;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
 import love.aira.kohaku.gateway.handler.HandlerResult;
 import love.aira.kohaku.reply.BotReplies;
+import love.aira.kohaku.support.Mentions;
 
 /**
  * 「命令进入 + 状态驱动按钮」骨架：最常用的一种功能形态（如分页卡片、菜单、列表），
@@ -32,7 +34,8 @@ import love.aira.kohaku.reply.BotReplies;
  * <ul>
  *   <li>入口：单聊、群内 @机器人、群内全量消息各注册一个入口（全量需平台为该群开通「接收全量信息」，
  *       否则该事件不会下发），按命令前缀匹配，不匹配一律 {@code IGNORED}（不会吃掉别人的命令），
- *       命中则用 {@code render(状态)} 被动回复；</li>
+ *       命中则用 {@code render(状态)} 被动回复；匹配前会剥掉行首的机器人提及
+ *       （全量消息的 content 保留 {@code <@id>}），因此群里 {@code @机器人 /card} 与 {@code /card} 等效；</li>
  *   <li>按钮：每个动作一个回调，**从按钮 data 的 state 里取状态**再渲染 —— 状态自描述，
  *       所以"点第 3 页"与"发 /card next 3"走同一条渲染路径，重复点击/重放天然幂等；</li>
  *   <li>被动回复走 {@link BotReplies}（目标、msg_id/msg_seq、互动 event_id、超限告警全自动）。</li>
@@ -121,9 +124,9 @@ public final class ButtonFeature {
                     .message(C2cMessageCreateEvent.class,
                             event -> entry(event, event.payload() == null ? null : event.payload().content(), replies))
                     .message(GroupAtMessageCreateEvent.class,
-                            event -> entry(event, event.payload() == null ? null : event.payload().content(), replies))
+                            event -> entry(event, commandText(event.payload()), replies))
                     .message(GroupMessageCreateEvent.class,
-                            event -> entry(event, event.payload() == null ? null : event.payload().content(), replies));
+                            event -> entry(event, commandText(event.payload()), replies));
             for (String action : buttonActions) {
                 feature.button(action, context -> {
                     SendMessageRequest request = render(context.state());
@@ -132,6 +135,14 @@ public final class ButtonFeature {
                 });
             }
             return feature.build();
+        }
+
+        /**
+         * 命令文本：群消息先剥掉行首的机器人提及 —— 群全量消息（{@code GROUP_MESSAGE_CREATE}）的 content
+         * 会原样保留 {@code <@机器人id>}，而群 @ 消息的平台已剥好。单聊没有提及。
+         */
+        private static String commandText(GroupMessage message) {
+            return message == null ? null : Mentions.stripLeading(message.content(), message.mentions());
         }
 
         private HandlerResult entry(BotEvent event, String content, BotReplies replies) {

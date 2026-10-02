@@ -128,6 +128,29 @@ class ButtonFeatureTest {
                 .contains("\"msg_id\":\"MSG_G\"").contains("# 第 2 页");
     }
 
+    /** 全量群里 @机器人 发命令：content 原样带 {@code <@机器人id>}，剥掉行首提及后应正常命中。 */
+    @Test
+    void fullGroupMessageStripsLeadingBotMention() {
+        server.stub(GROUP_PATH, 200, SENT);
+
+        assertThat(fullGroupEntry(feature()).handle(fullGroupMessageMentionedBy("/card 2", botMention())))
+                .isEqualTo(HandlerResult.CONSUMED);
+
+        assertThat(server.calls(GROUP_PATH).getFirst().body())
+                .contains("\"msg_id\":\"MSG_G\"").contains("# 第 2 页");
+    }
+
+    /** 群里 @ 的是别人的消息不是给机器人的命令，不能被误当成 /card。 */
+    @Test
+    void fullGroupMessageKeepsMentionOfAnotherMember() {
+        MessageAuthor alice = new MessageAuthor("ALICE_OPENID", "Alice", false, null, null, null, null,
+                "ALICE_OPENID", "member");
+
+        assertThat(fullGroupEntry(feature()).handle(fullGroupMessageMentionedBy("/card 2", alice)))
+                .isEqualTo(HandlerResult.IGNORED);
+        assertThat(server.calls()).isEmpty();
+    }
+
     @Test
     void defaultCommandIsSlashId() {
         server.stub(USER_PATH, 200, SENT);      // 假服务按次消费 stub，两次调用要两条
@@ -260,6 +283,17 @@ class ButtonFeatureTest {
     private static GroupMessageCreateEvent fullGroupMessage(String content) {
         return new GroupMessageCreateEvent(3, "GROUP_MESSAGE_CREATE:ID", raw(),
                 new GroupMessage("MSG_G", author(), content, "GROUP_OPENID", null, null, null, null, null, null, null));
+    }
+
+    /** 全量群事件，content 按平台格式保留行首 {@code <@id>}，mentions 里带上被 @ 的人。 */
+    private static GroupMessageCreateEvent fullGroupMessageMentionedBy(String content, MessageAuthor mention) {
+        return new GroupMessageCreateEvent(4, "GROUP_MESSAGE_CREATE:ID", raw(),
+                new GroupMessage("MSG_G", author(), "<@" + mention.id() + "> " + content, "GROUP_OPENID", null, null,
+                        null, null, List.of(mention), null, null));
+    }
+
+    private static MessageAuthor botMention() {
+        return new MessageAuthor("BOT_OPENID", "kohaku", true, null, null, null, null, "BOT_OPENID", "member");
     }
 
     private static MessageAuthor author() {
