@@ -14,8 +14,10 @@ import love.aira.kohaku.feature.ButtonHandler;
 import love.aira.kohaku.interaction.InteractionRouter;
 import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
+import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
 import love.aira.kohaku.gateway.event.InteractionCreateEvent;
 import love.aira.kohaku.gateway.event.model.C2cMessage;
+import love.aira.kohaku.gateway.event.model.GroupMessage;
 import love.aira.kohaku.gateway.event.model.InteractionCreate;
 import love.aira.kohaku.gateway.event.model.InteractionData;
 import love.aira.kohaku.gateway.event.model.InteractionResolved;
@@ -154,6 +156,58 @@ class TodoFeatureTest {
                 .isEqualTo(TodoFeature.USE_INTERACTION_BUTTONS ? "todo:done:id=1" : "/todo done 1");
     }
 
+
+    /** 按触发者隔离：同一个群里，两个人各看各的。 */
+    @Test
+    void todosAreIsolatedPerUser() {
+        entry().handle(c2c("/todo add 甲的事", "OPENID_1"));
+
+        assertThat(entry().handle(c2c("/todo list", "OPENID_2"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(capturedText()).contains("待办为空");
+
+        entry().handle(c2c("/todo list", "OPENID_1"));
+        assertThat(capturedMarkdown()).contains("#1 甲的事");
+    }
+
+    /** 同一个人在群里与单聊里是同一份列表：群聊的 member_openid 与单聊的 user_openid 同值。 */
+    @Test
+    void samePersonSharesTodosAcrossGroupAndC2c() {
+        entry().handle(c2c("/todo add 买菜", "OPENID_1"));
+
+        assertThat(groupEntry().handle(groupAt("/todo list", "OPENID_1"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(capturedMarkdown()).contains("#1 买菜");
+        assertThat(buttonData(capturedKeyboard())).containsExactly("todo:done:id=1");
+
+        // 在群里点「完成」，单聊里也应看到结果（同一份列表）
+        assertThat(button(TodoFeature.ACTION_DONE).onButton(groupContext("todo:done:id=1", "OPENID_1")))
+                .isEqualTo(HandlerResult.CONSUMED);
+        entry().handle(c2c("/todo list", "OPENID_1"));
+        assertThat(capturedText()).contains("待办为空");
+
+        // 另一个人在群里仍看不到这条
+        assertThat(groupEntry().handle(groupAt("/todo list", "OPENID_2"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(capturedText()).contains("待办为空");
+    }
+
+    /** 别人的按钮（转发/旧消息）落不到我的列表上：id 只在自己的列表里查。 */
+    @Test
+    void buttonFromAnotherUserDoesNotCompleteForeignItem() {
+        entry().handle(c2c("/todo add 甲的事", "OPENID_1"));
+
+        assertThat(button(TodoFeature.ACTION_DONE).onButton(context("todo:done:id=1",
+                Map.of(TodoFeature.STATE_ID, "1"), "OPENID_2"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(capturedText()).contains("没有 #1");
+
+        entry().handle(c2c("/todo list", "OPENID_1"));
+        assertThat(capturedMarkdown()).contains("#1 甲的事");     // 甲的事没被删
+    }
+
+    /** 平台没下发触发者标识的异常报文：交回处理链，不炸也不误写。 */
+    @Test
+    void ignoresMessageWithoutSenderIdentity() {
+        assertThat(entry().handle(c2c("/todo add x", null))).isEqualTo(HandlerResult.IGNORED);
+    }
+
     @SuppressWarnings("unchecked")
     private BotEventHandler<C2cMessageCreateEvent> entry() {
         return (BotEventHandler<C2cMessageCreateEvent>) feature.messageHandlers().stream()
@@ -203,10 +257,56 @@ class TodoFeatureTest {
     }
 
     private static C2cMessageCreateEvent c2c(String content) {
-        MessageAuthor author = new MessageAuthor("id", "nick", false, null, null, null, "USER_OPENID", null, null);
+        return c2c(content, "USER_OPENID");
+    }
+
+
+    private static C2cMessageCreateEvent c2c(String content, String userOpenid) {
+        MessageAuthor author = new MessageAuthor("id", "nick", false, null, null, null, userOpenid, null, null);
         C2cMessage message = new C2cMessage("MSG_1", author, content, "2026-10-02T00:00:00+08:00", 0, null, null, null,
                 null);
         return new C2cMessageCreateEvent(1, "C2C_MESSAGE_CREATE:EVENT_ID", new JsonMapper().readTree("{}"), message);
+    }
+
+    /** 群 @ 消息：群场景下发的是 member_openid（与单聊的 user_openid 同值）。 */
+    private static GroupAtMessageCreateEvent groupAt(String content, String memberOpenid) {
+        MessageAuthor author = new MessageAuthor("id", "nick", false, null, null, null, null, memberOpenid, "member");
+        GroupMessage message = new GroupMessage("MSG_G", author, content, "GROUP_OPENID", "2026-10-02T00:00:00+08:00", 0,
+                null, null, null, null, null);
+        return new GroupAtMessageCreateEvent(2, "GROUP_AT_MESSAGE_CREATE:EVENT_ID", new JsonMapper().readTree("{}"),
+                message);
+    }
+
+    private static FeatureContext context(String buttonData, Map<String, String> state, String userOpenid) {
+        return FeatureContext.ofButton(interaction(buttonData, userOpenid), TodoFeature.ID, TodoFeature.ACTION_DONE,
+                state, "done-1", buttonData);
+    }
+
+    /** 群场景的按钮点击：chat_type=1，身份在 group_member_openid。 */
+    private static FeatureContext groupContext(String buttonData, String groupMemberOpenid) {
+        InteractionResolved resolved = new InteractionResolved(buttonData, "done-1", null, null, null, null, null, null,
+                null, null);
+        InteractionCreate payload = new InteractionCreate("EVENT_ID", 11, "group", 1, "2026-10-02T00:00:00+08:00",
+                null, null, null, "GROUP_OPENID", groupMemberOpenid, new InteractionData(11, resolved), 1, "102012345");
+        return FeatureContext.ofButton(new InteractionCreateEvent(1, "INTERACTION_CREATE:EVENT_ID",
+                new JsonMapper().readTree("{}"), payload), TodoFeature.ID, TodoFeature.ACTION_DONE,
+                Map.of(TodoFeature.STATE_ID, "1"), "done-1", buttonData);
+    }
+
+    private static InteractionCreateEvent interaction(String buttonData, String userOpenid) {
+        InteractionResolved resolved = new InteractionResolved(buttonData, "done-1", null, null, null, null, null, null,
+                null, null);
+        InteractionCreate payload = new InteractionCreate("EVENT_ID", 11, "c2c", 2, "2026-10-02T00:00:00+08:00",
+                null, null, userOpenid, null, null, new InteractionData(11, resolved), 1, "102012345");
+        return new InteractionCreateEvent(1, "INTERACTION_CREATE:EVENT_ID", new JsonMapper().readTree("{}"), payload);
+    }
+
+    @SuppressWarnings("unchecked")
+    private BotEventHandler<GroupAtMessageCreateEvent> groupEntry() {
+        return (BotEventHandler<GroupAtMessageCreateEvent>) feature.messageHandlers().stream()
+                .filter(handler -> handler.eventType().equals(GroupAtMessageCreateEvent.class))
+                .findFirst()
+                .orElseThrow();
     }
 
     private static InteractionCreateEvent interaction(String buttonData) {
@@ -218,7 +318,6 @@ class TodoFeatureTest {
     }
 
     private static FeatureContext context(String buttonData, Map<String, String> state) {
-        return FeatureContext.ofButton(interaction(buttonData), TodoFeature.ID, TodoFeature.ACTION_DONE, state,
-                "done-1", buttonData);
+        return context(buttonData, state, "USER_OPENID");
     }
 }

@@ -230,7 +230,7 @@ public class PageFeature {
 与发命令走同一条渲染路径；回复经 `BotReplies` 自动补 `msg_id`/`msg_seq` 或互动 `event_id`。
 `render` 收到的是 `FeatureContext`：`state()` 是按钮状态，`event()`/`userOpenid()`/`groupOpenid()` 是触发事件与身份。
 
-功能有状态、要复用字段与方法时，直接实现 `BotFeature` 接口（见示例 `TodoFeature`）；
+功能有状态、要复用字段与方法时，直接实现 `BotFeature` 接口（见示例 `TodoFeature`：它用 `FeatureContext.userOpenid()` 把待办按触发者隔离 —— 同一个人在群里与单聊共享一份列表，不同人互不可见，别人的按钮点不动我的数据）；
 只观察事件（日志、落库）用 `@EventListener` 监听 `BotEvent`，与处理链互不影响。
 
 完整示例见 [`kohaku-example`](kohaku-example)：`card` 分页卡片、`todo` 子命令 + 按钮、`EventLogger` 观察者。
