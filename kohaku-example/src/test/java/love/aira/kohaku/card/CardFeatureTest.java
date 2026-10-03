@@ -75,7 +75,7 @@ class CardFeatureTest {
         BotEventHandler<C2cMessageCreateEvent> entry = c2cEntry();
         C2cMessageCreateEvent event = c2cMessage("/card");
 
-        assertThat(entry.handle(event)).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(entry.handle(event).isConsumed()).isTrue();
 
         SendMessageRequest sent = captureReplied();
         assertThat(sent.markdown().content()).contains("卡片列表 1/3");
@@ -94,8 +94,7 @@ class CardFeatureTest {
 
     @Test
     void nextButtonRendersFollowingPageAndRepliesToTheInteraction() {
-        assertThat(button("next").onButton(context("card:next:p=2", Map.of("p", "2"))))
-                .isEqualTo(HandlerResult.CONSUMED);
+        assertThat(button("next").onButton(context("card:next:p=2", Map.of("p", "2"))).isConsumed()).isTrue();
 
         SendMessageRequest sent = captureReplied();
         assertThat(sent.markdown().content()).contains("卡片列表 2/3").contains("C-006").contains("C-010");
@@ -104,8 +103,7 @@ class CardFeatureTest {
 
     @Test
     void pageButtonReRendersCurrentPage() {
-        assertThat(button("page").onButton(context("card:page:p=2", Map.of("p", "2"))))
-                .isEqualTo(HandlerResult.CONSUMED);
+        assertThat(button("page").onButton(context("card:page:p=2", Map.of("p", "2"))).isConsumed()).isTrue();
 
         assertThat(captureReplied().markdown().content()).contains("卡片列表 2/3");
     }
@@ -115,7 +113,7 @@ class CardFeatureTest {
         BotEventHandler<C2cMessageCreateEvent> entry = c2cEntry();
 
         // 指令按钮点击后，客户端会把 data 作为普通消息发出
-        assertThat(entry.handle(c2cMessage("/card next 2"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(entry.handle(c2cMessage("/card next 2")).isConsumed()).isTrue();
 
         assertThat(captureReplied().markdown().content()).contains("卡片列表 2/3");
     }
@@ -132,16 +130,52 @@ class CardFeatureTest {
         assertThat(CardFeature.state(CommandArgs.parse("/card next"))).isNull();
     }
 
+    /**
+     * 入口处理器：命中时返回 {@link HandlerResult#consumed(Runnable)}（回复在 worker 线程池异步执行）。
+     * 测试里包一层同步跑掉副作用，便于断言真正交给 {@link BotReplies} 的请求。
+     */
     @SuppressWarnings("unchecked")
     private BotEventHandler<C2cMessageCreateEvent> c2cEntry() {
-        return (BotEventHandler<C2cMessageCreateEvent>) feature.messageHandlers().getFirst();
+        BotEventHandler<C2cMessageCreateEvent> delegate =
+                (BotEventHandler<C2cMessageCreateEvent>) feature.messageHandlers().getFirst();
+        return new BotEventHandler<>() {
+            @Override
+            public Class<C2cMessageCreateEvent> eventType() {
+                return C2cMessageCreateEvent.class;
+            }
+
+            @Override
+            public HandlerResult handle(C2cMessageCreateEvent event) {
+                return runAfter(delegate.handle(event));
+            }
+        };
     }
 
     private ButtonHandler button(String action) {
-        return feature.buttonHandlers().stream()
+        ButtonHandler delegate = feature.buttonHandlers().stream()
                 .filter(handler -> handler.action().equals(action))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("未注册的按钮动作: " + action));
+        return new ButtonHandler() {
+            @Override
+            public String action() {
+                return action;
+            }
+
+            @Override
+            public HandlerResult onButton(FeatureContext context) {
+                return runAfter(delegate.onButton(context));
+            }
+        };
+    }
+
+    /** 示例的回复是异步副作用：测试里同步执行，模拟框架在 worker 线程池上的行为。 */
+    private static HandlerResult runAfter(HandlerResult result) {
+        Runnable after = result.after();
+        if (after != null) {
+            after.run();
+        }
+        return result;
     }
 
     /** 捕获「功能 → BotReplies」的一次回复。目标选择与 msg_id/msg_seq/event_id 由 BotReplies 负责（见 BotRepliesTest）。 */

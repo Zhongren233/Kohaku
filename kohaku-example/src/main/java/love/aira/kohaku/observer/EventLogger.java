@@ -14,8 +14,9 @@ import org.springframework.stereotype.Component;
  * {@code @EventListener} 观察者通道：{@code BotEvent} 参数会收到 READY / RESUMED 与全部 dispatch 事件，
  * 且**与处理链互不影响** —— 即使事件已被某个处理器消费（CONSUMED），这里依然收得到。
  *
- * <p>本方法在网关读循环线程（{@code qq-gateway-io}）上同步执行：示例只做打印。真实项目里若要做
- * 落库、指标上报等耗时操作，请加 {@code @Async} 或自行投递到线程池，否则会顶住心跳与后续事件。
+ * <p>本方法在网关专用的单线程派发器（{@code qq-gateway-dispatch}）上同步执行 —— 不是网络读循环，
+ * 不影响心跳；示例只做打印。真实项目里若要做落库、指标上报等耗时操作，建议自行投递到线程池
+ * （或 {@code @Async}），否则会串行拖慢后续事件的派发。
  */
 @Component
 public class EventLogger {

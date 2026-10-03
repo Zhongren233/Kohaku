@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-/** 群内 @机器人 消息处理器示例：回复内容并消费事件。 */
+/** 群内 @机器人 消息处理器示例：回复内容并消费事件（回复为异步副作用，见 {@link HandlerResult#consumed}）。 */
 @Component
 @Order(20)
 public class EchoGroupHandler implements BotEventHandler<GroupAtMessageCreateEvent> {
@@ -37,7 +37,7 @@ public class EchoGroupHandler implements BotEventHandler<GroupAtMessageCreateEve
         }
         log.info("收到群消息 group={} member={} content={}", message.groupOpenid(), message.author().memberOpenid(),
                 content);
-        replies.text(event, "echo: " + message.content());
-        return HandlerResult.CONSUMED;
+        // 回复是耗时上行：交给框架的 worker 线程池异步执行
+        return HandlerResult.consumed(() -> replies.text(event, "echo: " + message.content()));
     }
 }

@@ -93,17 +93,14 @@ public class TodoFeature {
         List<Item> items = itemsOf(owner);
         CommandArgs sub = root.tail();
         if (sub == null) {
-            replies.text(event, HELP);
-            return HandlerResult.CONSUMED;
+            return HandlerResult.consumed(() -> replies.text(event, HELP));
         }
         return switch (sub.command()) {
             case "add" -> add(sub, items, event, replies);
             case "list" -> render(items, event, "", replies);
             case "done" -> done(owner, sub.intAt(0, -1), event, replies);
-            default -> {
-                replies.text(event, "未知子命令: " + sub.command() + "\n" + HELP);
-                yield HandlerResult.CONSUMED;
-            }
+            default -> HandlerResult.consumed(
+                    () -> replies.text(event, "未知子命令: " + sub.command() + "\n" + HELP));
         };
     }
 
@@ -115,8 +112,7 @@ public class TodoFeature {
     /** {@code /todo add 买菜 和 牛奶} → 新增一条并回显带按钮的列表。 */
     private HandlerResult add(CommandArgs args, List<Item> items, BotEvent event, BotReplies replies) {
         if (args.isEmpty()) {
-            replies.text(event, "用法: " + COMMAND + " add <内容>");
-            return HandlerResult.CONSUMED;
+            return HandlerResult.consumed(() -> replies.text(event, "用法: " + COMMAND + " add <内容>"));
         }
         Item item = new Item(nextId.getAndIncrement(), String.join(" ", args.args()));
         items.add(item);
@@ -134,13 +130,11 @@ public class TodoFeature {
         }
         List<Item> items = itemsOf(owner);
         if (id < 1) {
-            replies.text(event, "用法: " + COMMAND + " done <编号>");
-            return HandlerResult.CONSUMED;
+            return HandlerResult.consumed(() -> replies.text(event, "用法: " + COMMAND + " done <编号>"));
         }
         Item removed = items.stream().filter(item -> item.id() == id).findFirst().orElse(null);
         if (removed == null) {
-            replies.text(event, "没有 #" + id + " 这条待办\n" + HELP);
-            return HandlerResult.CONSUMED;
+            return HandlerResult.consumed(() -> replies.text(event, "没有 #" + id + " 这条待办\n" + HELP));
         }
         items.remove(removed);
         return render(items, event, "已完成 #" + id + " " + removed.text() + "\n\n", replies);
@@ -149,15 +143,17 @@ public class TodoFeature {
     /** 渲染当前列表（markdown + 每条一个「完成」按钮）；列表入口、增删后共用同一路径。 */
     private HandlerResult render(List<Item> items, BotEvent event, String headline, BotReplies replies) {
         if (items.isEmpty()) {
-            replies.text(event, headline + "待办为空，用 " + COMMAND + " add <内容> 添加");
-            return HandlerResult.CONSUMED;
+            return HandlerResult.consumed(
+                    () -> replies.text(event, headline + "待办为空，用 " + COMMAND + " add <内容> 添加"));
         }
         StringBuilder markdown = new StringBuilder(headline).append("**待办**");
         for (Item item : items) {
             markdown.append("\n- **#").append(item.id()).append(' ').append(item.text()).append("**");
         }
-        replies.markdown(event, markdown.toString(), keyboard(items));
-        return HandlerResult.CONSUMED;
+        // 消息文本与键盘在派发线程上一次性快照，只有网络发送是异步的（避免副作用途中列表被改动）
+        String text = markdown.toString();
+        Keyboard buttons = keyboard(items);
+        return HandlerResult.consumed(() -> replies.markdown(event, text, buttons));
     }
 
     /**

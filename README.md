@@ -91,8 +91,8 @@ public class PingFeature {
                 .message(GroupMessageCreateEvent.class, event -> onMessage(event, groupText(event.payload()), replies))
                 .button(ACTION_PING, context -> {
                     // 按钮点击：交互事件同样能被 BotReplies 被动回复（按 chat_type 自动选单聊/群聊）
-                    replies.markdown(context.interaction(), render(), keyboard());
-                    return HandlerResult.CONSUMED;
+                    // 回复是耗时上行：用 consumed(...) 声明为异步副作用，路由判定保持同步
+                    return HandlerResult.consumed(() -> replies.markdown(context.interaction(), render(), keyboard()));
                 })
                 .build();
     }
@@ -103,8 +103,8 @@ public class PingFeature {
         if (args == null || !COMMAND.equals(args.command())) {
             return HandlerResult.IGNORED;
         }
-        replies.markdown(event, render(), keyboard());
-        return HandlerResult.CONSUMED;
+        // 回复走异步副作用（worker 线程池），不在网关派发线程上做网络调用
+        return HandlerResult.consumed(() -> replies.markdown(event, render(), keyboard()));
     }
 
     private String render() {
@@ -132,7 +132,8 @@ public class PingFeature {
 
 - 声明为 `@Bean` 即完成注册；执行顺序按 `kohaku.qq.handler-order` 的 Bean 名称，其余按 `@Order`，
   各 Feature 的消息入口排在链尾。
-- 不属于自己的输入必须返回 `HandlerResult.IGNORED`（继续走链），命中返回 `CONSUMED`（终止链内后续处理器）。
+- 不属于自己的输入必须返回 `HandlerResult.IGNORED`（继续走链），命中返回 `CONSUMED`（终止链内后续处理器）；
+  回复这类耗时上行用 `HandlerResult.consumed(() -> …)` 异步执行（见「执行线程与异步化」）。
 - 按钮用 `FeatureKeyboards.button(buttonId, featureId, action, label, state)` 生成（回调按钮，需 `INTERACTION` 意图）；
   未开通互动权限时改用 `FeatureKeyboards.commandButton(buttonId, label, command)`，点击即发一条普通消息，只依赖消息事件。
 - 键盘只在 markdown 消息上渲染，发送带按钮的消息用 `replies.markdown(...)`。

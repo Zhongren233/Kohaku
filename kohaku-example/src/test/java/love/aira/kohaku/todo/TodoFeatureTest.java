@@ -41,7 +41,7 @@ class TodoFeatureTest {
 
     @Test
     void bareCommandRepliesWithHelp() {
-        assertThat(entry().handle(c2c("/todo"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(entry().handle(c2c("/todo")).isConsumed()).isTrue();
 
         assertThat(capturedText()).contains("add").contains("list").contains("done");
     }
@@ -62,7 +62,7 @@ class TodoFeatureTest {
         entry().handle(c2c("/todo add 买菜"));
         entry().handle(c2c("/todo add 写周报"));
 
-        assertThat(entry().handle(c2c("/todo done 1"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(entry().handle(c2c("/todo done 1")).isConsumed()).isTrue();
 
         assertThat(capturedMarkdown()).contains("已完成 #1 买菜").contains("#2 写周报");
         assertThat(buttonLabels(capturedKeyboard())).containsExactly("完成 #2");
@@ -74,7 +74,7 @@ class TodoFeatureTest {
         entry().handle(c2c("/todo add 写周报"));
 
         FeatureContext click = context("todo:done:id=1", Map.of(TodoFeature.STATE_ID, "1"));
-        assertThat(button(TodoFeature.ACTION_DONE).onButton(click)).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(button(TodoFeature.ACTION_DONE).onButton(click).isConsumed()).isTrue();
 
         assertThat(capturedMarkdown()).contains("#2 写周报");
         assertThat(buttonLabels(capturedKeyboard())).containsExactly("完成 #2");
@@ -89,7 +89,7 @@ class TodoFeatureTest {
 
         InteractionRouter router = new InteractionRouter(List.of(feature));
 
-        assertThat(router.handle(interaction("todo:done:id=1"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(runAfter(router.handle(interaction("todo:done:id=1"))).isConsumed()).isTrue();
 
         assertThat(capturedMarkdown()).contains("#2 写周报");
         assertThat(buttonLabels(capturedKeyboard())).containsExactly("完成 #2");
@@ -110,14 +110,14 @@ class TodoFeatureTest {
     void completingLastItemClearsList() {
         entry().handle(c2c("/todo add 买菜"));
 
-        assertThat(entry().handle(c2c("/todo done 1"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(entry().handle(c2c("/todo done 1")).isConsumed()).isTrue();
 
         assertThat(capturedText()).contains("已完成 #1 买菜").contains("待办为空");
     }
 
     @Test
     void listOnEmptyRepliesWithHint() {
-        assertThat(entry().handle(c2c("/todo list"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(entry().handle(c2c("/todo list")).isConsumed()).isTrue();
 
         assertThat(capturedText()).contains("待办为空");
     }
@@ -127,7 +127,7 @@ class TodoFeatureTest {
         entry().handle(c2c("/todo add"));
         assertThat(capturedText()).contains("用法");
 
-        assertThat(entry().handle(c2c("/todo nope"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(entry().handle(c2c("/todo nope")).isConsumed()).isTrue();
         assertThat(capturedText()).contains("未知子命令").contains("nope");
     }
 
@@ -142,7 +142,7 @@ class TodoFeatureTest {
     /** 命令词与子命令用任意空白分隔：匹配与切分共用同一次分词。 */
     @Test
     void acceptsAnyWhitespaceBetweenCommandAndSubcommand() {
-        assertThat(entry().handle(c2c("/todo\tadd 空格"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(entry().handle(c2c("/todo\tadd 空格")).isConsumed()).isTrue();
 
         assertThat(capturedMarkdown()).contains("#1 空格");
     }
@@ -162,7 +162,7 @@ class TodoFeatureTest {
     void todosAreIsolatedPerUser() {
         entry().handle(c2c("/todo add 甲的事", "OPENID_1"));
 
-        assertThat(entry().handle(c2c("/todo list", "OPENID_2"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(entry().handle(c2c("/todo list", "OPENID_2")).isConsumed()).isTrue();
         assertThat(capturedText()).contains("待办为空");
 
         entry().handle(c2c("/todo list", "OPENID_1"));
@@ -174,18 +174,18 @@ class TodoFeatureTest {
     void samePersonSharesTodosAcrossGroupAndC2c() {
         entry().handle(c2c("/todo add 买菜", "OPENID_1"));
 
-        assertThat(groupEntry().handle(groupAt("/todo list", "OPENID_1"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(groupEntry().handle(groupAt("/todo list", "OPENID_1")).isConsumed()).isTrue();
         assertThat(capturedMarkdown()).contains("#1 买菜");
         assertThat(buttonData(capturedKeyboard())).containsExactly("todo:done:id=1");
 
         // 在群里点「完成」，单聊里也应看到结果（同一份列表）
-        assertThat(button(TodoFeature.ACTION_DONE).onButton(groupContext("todo:done:id=1", "OPENID_1")))
-                .isEqualTo(HandlerResult.CONSUMED);
+        assertThat(button(TodoFeature.ACTION_DONE).onButton(groupContext("todo:done:id=1", "OPENID_1")).isConsumed())
+                .isTrue();
         entry().handle(c2c("/todo list", "OPENID_1"));
         assertThat(capturedText()).contains("待办为空");
 
         // 另一个人在群里仍看不到这条
-        assertThat(groupEntry().handle(groupAt("/todo list", "OPENID_2"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(groupEntry().handle(groupAt("/todo list", "OPENID_2")).isConsumed()).isTrue();
         assertThat(capturedText()).contains("待办为空");
     }
 
@@ -195,7 +195,7 @@ class TodoFeatureTest {
         entry().handle(c2c("/todo add 甲的事", "OPENID_1"));
 
         assertThat(button(TodoFeature.ACTION_DONE).onButton(context("todo:done:id=1",
-                Map.of(TodoFeature.STATE_ID, "1"), "OPENID_2"))).isEqualTo(HandlerResult.CONSUMED);
+                Map.of(TodoFeature.STATE_ID, "1"), "OPENID_2")).isConsumed()).isTrue();
         assertThat(capturedText()).contains("没有 #1");
 
         entry().handle(c2c("/todo list", "OPENID_1"));
@@ -210,17 +210,51 @@ class TodoFeatureTest {
 
     @SuppressWarnings("unchecked")
     private BotEventHandler<C2cMessageCreateEvent> entry() {
-        return (BotEventHandler<C2cMessageCreateEvent>) feature.messageHandlers().stream()
+        return autoRun((BotEventHandler<C2cMessageCreateEvent>) feature.messageHandlers().stream()
                 .filter(handler -> handler.eventType().equals(C2cMessageCreateEvent.class))
                 .findFirst()
-                .orElseThrow();
+                .orElseThrow(), C2cMessageCreateEvent.class);
     }
 
     private ButtonHandler button(String action) {
-        return feature.buttonHandlers().stream()
+        ButtonHandler delegate = feature.buttonHandlers().stream()
                 .filter(handler -> handler.action().equals(action))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("未注册的按钮动作: " + action));
+        return new ButtonHandler() {
+            @Override
+            public String action() {
+                return action;
+            }
+
+            @Override
+            public HandlerResult onButton(FeatureContext context) {
+                return runAfter(delegate.onButton(context));
+            }
+        };
+    }
+
+    /** 示例的回复是异步副作用（{@link HandlerResult#consumed(Runnable)}）：测试里同步执行后再断言。 */
+    private static <E extends BotEvent> BotEventHandler<E> autoRun(BotEventHandler<E> delegate, Class<E> type) {
+        return new BotEventHandler<>() {
+            @Override
+            public Class<E> eventType() {
+                return type;
+            }
+
+            @Override
+            public HandlerResult handle(E event) {
+                return runAfter(delegate.handle(event));
+            }
+        };
+    }
+
+    private static HandlerResult runAfter(HandlerResult result) {
+        Runnable after = result.after();
+        if (after != null) {
+            after.run();
+        }
+        return result;
     }
 
     /** 最后一次 {@code replies.text(...)} 的内容（目标与被动标记由 BotReplies 负责）。 */
@@ -303,10 +337,10 @@ class TodoFeatureTest {
 
     @SuppressWarnings("unchecked")
     private BotEventHandler<GroupAtMessageCreateEvent> groupEntry() {
-        return (BotEventHandler<GroupAtMessageCreateEvent>) feature.messageHandlers().stream()
+        return autoRun((BotEventHandler<GroupAtMessageCreateEvent>) feature.messageHandlers().stream()
                 .filter(handler -> handler.eventType().equals(GroupAtMessageCreateEvent.class))
                 .findFirst()
-                .orElseThrow();
+                .orElseThrow(), GroupAtMessageCreateEvent.class);
     }
 
     private static InteractionCreateEvent interaction(String buttonData) {

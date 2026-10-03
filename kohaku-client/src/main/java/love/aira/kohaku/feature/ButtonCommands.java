@@ -45,7 +45,9 @@ import love.aira.kohaku.support.Mentions;
  *   <li>渲染能拿到触发事件与身份：{@code render} 收到的是 {@link FeatureContext} —— 入口路径是那条消息
  *       事件，按钮路径是本次互动事件，触发者/群直接读 {@code context.userOpenid()}（各场景都有值） /
  *       {@code groupOpenid()}（仅群聊非空）；</li>
- *   <li>被动回复走 {@link BotReplies}（目标、msg_id/msg_seq、互动 event_id、超限告警全自动）。</li>
+ *   <li>被动回复走 {@link BotReplies}（目标、msg_id/msg_seq、互动 event_id、超限告警全自动）；
+ *       回复是耗时上行，框架以 {@link HandlerResult#consumed(Runnable)} 交给 worker 线程池异步执行，
+ *       因此 {@code state}/{@code render} 应当是快速的纯函数。</li>
  * </ul>
  *
  * <p>状态即按钮 data 的 state 段（{@link ButtonData}），只承载渲染所需的键值（如页码），不要塞大对象；
@@ -155,8 +157,8 @@ public final class ButtonCommands {
                             event -> entry(event, commandText(event.payload()), replies));
             for (String action : buttonActions) {
                 feature.button(action, context -> {
-                    replies.send(context.interaction(), render(context));
-                    return HandlerResult.CONSUMED;
+                    SendMessageRequest request = render(context);   // 渲染是纯函数，保持同步
+                    return HandlerResult.consumed(() -> replies.send(context.interaction(), request));
                 });
             }
             return feature.build();
@@ -179,8 +181,8 @@ public final class ButtonCommands {
             if (state == null || state.isEmpty()) {
                 return HandlerResult.IGNORED;
             }
-            replies.send(event, render(FeatureContext.ofMessage(event, state)));
-            return HandlerResult.CONSUMED;
+            SendMessageRequest request = render(FeatureContext.ofMessage(event, state));
+            return HandlerResult.consumed(() -> replies.send(event, request));
         }
 
         private SendMessageRequest render(FeatureContext context) {

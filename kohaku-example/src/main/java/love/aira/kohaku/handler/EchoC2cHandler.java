@@ -11,7 +11,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * 单聊消息处理器示例：把收到的文本原样回复，并返回 {@link HandlerResult#CONSUMED} 终止后续处理器。
+ * 单聊消息处理器示例：把收到的文本原样回复。回复以 {@link HandlerResult#consumed(Runnable)} 声明为
+ * 异步副作用（交给框架的 worker 线程池），路由判定同步、命中即终止后续处理器。
  *
  * <p>执行顺序：本类 {@code @Order(10)} 在群聊处理器之前；也可用配置 {@code kohaku.qq.handler-order}
  * 按 Bean 名称显式声明顺序（未列出的处理器排在其后）。
@@ -43,8 +44,8 @@ public class EchoC2cHandler implements BotEventHandler<C2cMessageCreateEvent> {
         String openid = message.author().userOpenid();
         log.info("收到单聊消息 openid={} msg_idx={} content={}", openid, message.messageScene().messageIndex(),
                 message.content());
-        // 被动回复：BotReplies 自动带 msg_id 并递增 msg_seq（单聊 60 分钟内有效、最多 4 次）
-        replies.text(event, "echo: " + message.content());
-        return HandlerResult.CONSUMED;
+        // 被动回复是耗时上行（网络 + 可能的 token 刷新）：交给框架的 worker 线程池异步执行，
+        // 路由判定保持同步（返回 consumed 即终止后续处理器）
+        return HandlerResult.consumed(() -> replies.text(event, "echo: " + message.content()));
     }
 }

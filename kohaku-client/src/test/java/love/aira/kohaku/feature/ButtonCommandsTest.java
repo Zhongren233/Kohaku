@@ -15,6 +15,7 @@ import love.aira.kohaku.api.QqOpenApiClient;
 import love.aira.kohaku.api.model.SendMessageRequest;
 import love.aira.kohaku.config.KohakuConfig;
 import love.aira.kohaku.config.QqIntent;
+import love.aira.kohaku.gateway.event.BotEvent;
 import love.aira.kohaku.gateway.event.C2cMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupAtMessageCreateEvent;
 import love.aira.kohaku.gateway.event.GroupMessageCreateEvent;
@@ -85,8 +86,9 @@ class ButtonCommandsTest {
     void answersMatchingCommandWithRenderedState() {
         server.stub(USER_PATH, 200, SENT);
 
-        assertThat(c2cEntry(feature()).handle(c2cMessage("/card 3"))).isEqualTo(HandlerResult.CONSUMED);
+        HandlerResult result = dispatch(c2cEntry(feature()), c2cMessage("/card 3"));
 
+        assertThat(result.isConsumed()).isTrue();
         assertThat(rendered).containsExactly(Map.of("p", "3"));
         assertThat(server.calls(USER_PATH).getFirst().body())
                 .contains("\"msg_id\":\"MSG_1\"").contains("# 第 3 页");
@@ -97,7 +99,7 @@ class ButtonCommandsTest {
     void acceptsAnyWhitespaceBetweenCommandAndArguments() {
         server.stub(USER_PATH, 200, SENT);
 
-        assertThat(c2cEntry(feature()).handle(c2cMessage("/card\t3"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(dispatch(c2cEntry(feature()), c2cMessage("/card\t3")).isConsumed()).isTrue();
 
         assertThat(rendered).containsExactly(Map.of("p", "3"));
     }
@@ -119,7 +121,7 @@ class ButtonCommandsTest {
     void groupEntryAlsoWorks() {
         server.stub(GROUP_PATH, 200, SENT);
 
-        assertThat(groupEntry(feature()).handle(groupMessage("/card 2"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(dispatch(groupEntry(feature()), groupMessage("/card 2")).isConsumed()).isTrue();
 
         assertThat(server.calls(GROUP_PATH).getFirst().body())
                 .contains("\"msg_id\":\"MSG_G\"").contains("# 第 2 页");
@@ -130,7 +132,7 @@ class ButtonCommandsTest {
     void fullGroupMessageEntryAlsoWorks() {
         server.stub(GROUP_PATH, 200, SENT);
 
-        assertThat(fullGroupEntry(feature()).handle(fullGroupMessage("/card 2"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(dispatch(fullGroupEntry(feature()), fullGroupMessage("/card 2")).isConsumed()).isTrue();
 
         assertThat(server.calls(GROUP_PATH).getFirst().body())
                 .contains("\"msg_id\":\"MSG_G\"").contains("# 第 2 页");
@@ -141,8 +143,8 @@ class ButtonCommandsTest {
     void fullGroupMessageStripsLeadingBotMention() {
         server.stub(GROUP_PATH, 200, SENT);
 
-        assertThat(fullGroupEntry(feature()).handle(fullGroupMessageMentionedBy("/card 2", botMention())))
-                .isEqualTo(HandlerResult.CONSUMED);
+        assertThat(dispatch(fullGroupEntry(feature()), fullGroupMessageMentionedBy("/card 2", botMention())).isConsumed())
+                .isTrue();
 
         assertThat(server.calls(GROUP_PATH).getFirst().body())
                 .contains("\"msg_id\":\"MSG_G\"").contains("# 第 2 页");
@@ -168,8 +170,8 @@ class ButtonCommandsTest {
                 .render(context -> SendMessageRequest.text("投票"))
                 .build(replies);
 
-        assertThat(c2cEntry(feature).handle(c2cMessage("/vote"))).isEqualTo(HandlerResult.CONSUMED);
-        assertThat(c2cEntry(feature).handle(c2cMessage("/vote now"))).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(dispatch(c2cEntry(feature), c2cMessage("/vote")).isConsumed()).isTrue();
+        assertThat(dispatch(c2cEntry(feature), c2cMessage("/vote now")).isConsumed()).isTrue();
         assertThat(c2cEntry(feature).handle(c2cMessage("/voter"))).isEqualTo(HandlerResult.IGNORED);
 
         assertThat(server.calls(USER_PATH)).hasSize(2);
@@ -179,10 +181,9 @@ class ButtonCommandsTest {
     void buttonClickRendersFromButtonStateAndRepliesToTheInteraction() {
         server.stub(USER_PATH, 200, SENT);
 
-        HandlerResult result = button(feature(), "next")
-                .onButton(context("card:next;p=2", Map.of("p", "2")));
+        HandlerResult result = dispatch(button(feature(), "next"), context("card:next;p=2", Map.of("p", "2")));
 
-        assertThat(result).isEqualTo(HandlerResult.CONSUMED);
+        assertThat(result.isConsumed()).isTrue();
         assertThat(rendered).containsExactly(Map.of("p", "2"));      // 状态来自按钮 data，不依赖会话
         assertThat(server.calls(USER_PATH).getFirst().body())
                 .contains("\"event_id\":\"INTERACTION_CREATE:EVENT_ID\"").contains("# 第 2 页");
@@ -306,6 +307,26 @@ class ButtonCommandsTest {
                 .filter(handler -> handler.action().equals(action))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    /** 骨架的回复是异步副作用（{@link HandlerResult#consumed(Runnable)}）：测试里同步跑掉再断言报文。 */
+    private static <E extends BotEvent> HandlerResult dispatch(BotEventHandler<E> entry, E event) {
+        HandlerResult result = entry.handle(event);
+        runAfter(result);
+        return result;
+    }
+
+    private static HandlerResult dispatch(ButtonHandler button, FeatureContext context) {
+        HandlerResult result = button.onButton(context);
+        runAfter(result);
+        return result;
+    }
+
+    private static void runAfter(HandlerResult result) {
+        Runnable after = result.after();
+        if (after != null) {
+            after.run();
+        }
     }
 
     private static FeatureContext context(String buttonData, Map<String, String> state) {
