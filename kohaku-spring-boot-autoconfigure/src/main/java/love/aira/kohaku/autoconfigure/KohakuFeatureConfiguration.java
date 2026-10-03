@@ -13,12 +13,12 @@ import love.aira.kohaku.interaction.InteractionAckMode;
 import love.aira.kohaku.interaction.InteractionRouter;
 import love.aira.kohaku.reply.BotReplies;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 /** 功能装配：被动回复入口、按钮处理器线程池与互动路由（含 INTERACTION 意图校验）。 */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration
 public class KohakuFeatureConfiguration {
 
     /** 统一的被动回复入口：按入站事件自动选目标、补 msg_id/msg_seq 或 event_id。 */

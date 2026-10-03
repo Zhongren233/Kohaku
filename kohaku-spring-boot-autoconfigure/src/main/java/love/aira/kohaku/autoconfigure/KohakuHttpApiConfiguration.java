@@ -9,13 +9,13 @@ import love.aira.kohaku.api.QqInteractionApi;
 import love.aira.kohaku.api.QqMediaApi;
 import love.aira.kohaku.api.QqMessageApi;
 import love.aira.kohaku.api.QqOpenApiClient;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import tools.jackson.databind.ObjectMapper;
 
 /** QQ 开放平台 HTTP 侧装配：HttpClient、AccessToken 与各 REST 接口 Bean。 */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration
 public class KohakuHttpApiConfiguration {
 
     @Bean(destroyMethod = "close")

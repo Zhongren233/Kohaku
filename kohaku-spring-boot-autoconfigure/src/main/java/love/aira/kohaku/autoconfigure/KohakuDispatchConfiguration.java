@@ -8,13 +8,13 @@ import love.aira.kohaku.feature.BotFeature;
 import love.aira.kohaku.gateway.handler.BotEventHandler;
 import love.aira.kohaku.gateway.handler.EventDispatcher;
 import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 /** 事件处理链装配：按配置排序 BotEventHandler，并把各功能的消息入口追加到链尾。 */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration
 public class KohakuDispatchConfiguration {
 
     /**
