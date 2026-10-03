@@ -230,6 +230,33 @@ public class PageFeature {
 与发命令走同一条渲染路径；回复经 `BotReplies` 自动补 `msg_id`/`msg_seq` 或互动 `event_id`。
 `render` 收到的是 `FeatureContext`：`state()` 是按钮状态，`event()`/`userOpenid()`/`groupOpenid()` 是触发事件与身份。
 
+### 执行线程与异步化
+
+事件在**专用的单线程** `qq-gateway-dispatch` 上派发给处理链与 `@EventListener`：它不占用网关读循环，
+所以单个 handler 再慢也不会延迟心跳 ACK、不会把健康连接误判为僵尸（心跳由独立的 `qq-gateway-scheduler`
+驱动，读循环只负责收帧与控制帧）。但派发是**单线程且保序**的，一个慢 handler 会串行拖住它后面的所有事件 ——
+内置的 `BotReplies` 与示例 handler 都是同步阻塞的上行 REST，直接在消息入口里做 DB / LLM / 慢调用会拖慢整条链。
+
+推荐做法：消息入口只做快速判断（命中命令、取参数），把耗时逻辑丢进自己的线程池再做回复。
+starter 已提供 `kohakuHandlerExecutor`（`ExecutorService` Bean，默认 1 线程保序，可用
+`kohaku.qq.handler-threads` 调整；按钮回调默认就先应答、再丢进它执行），可直接注入复用：
+
+```java
+@Bean
+BotFeature slow(BotReplies replies,
+                @Qualifier("kohakuHandlerExecutor") ExecutorService workers) {
+    return BotFeature.of("slow")
+            .message(GroupAtMessageCreateEvent.class, event -> {
+                workers.execute(() -> replies.markdown(event, render(), keyboard())); // 耗时逻辑离开派发线程
+                return HandlerResult.CONSUMED;
+            })
+            .build();
+}
+```
+
+从别的线程回复是安全的：`BotReplies` 的目标与 `msg_id`/`msg_seq`/`event_id` 全部取自入站事件本身，
+AccessToken 刷新与被动回复记账也都做了并发保护。
+
 功能有状态、要复用字段与方法时，直接实现 `BotFeature` 接口（见示例 `TodoFeature`：它用 `FeatureContext.userOpenid()` 把待办按触发者隔离 —— 同一个人在群里与单聊共享一份列表，不同人互不可见，别人的按钮点不动我的数据）；
 只观察事件（日志、落库）用 `@EventListener` 监听 `BotEvent`，与处理链互不影响。
 

@@ -28,7 +28,10 @@ public class KohakuFeatureConfiguration {
         return new BotReplies(qqMessageApi, qqChannelMessageApi);
     }
 
-    /** 按钮处理器线程池：应答在网关线程完成后，耗时逻辑在这里执行，避免顶住读循环。 */
+    /**
+     * 工作线程池：按钮回调默认在「先应答、后执行」里用它；消息入口 handler 也可注入它，把 DB / LLM /
+     * 慢 REST 等耗时逻辑移出单线程的派发循环。默认 1 线程保持顺序，可用 {@code kohaku.qq.handler-threads} 调整。
+     */
     @Bean(name = "kohakuHandlerExecutor", destroyMethod = "shutdownNow")
     @ConditionalOnMissingBean(name = "kohakuHandlerExecutor")
     ExecutorService kohakuHandlerExecutor(QqBotProperties properties) {

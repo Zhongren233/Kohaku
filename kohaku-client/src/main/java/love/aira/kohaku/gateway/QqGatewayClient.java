@@ -6,12 +6,14 @@ import java.net.http.WebSocket;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import love.aira.kohaku.api.AccessTokenProvider;
@@ -44,10 +46,15 @@ import tools.jackson.databind.node.ObjectNode;
  *   <li>不可重试的错误码（机器人封禁/下架、无效 opcode 等）直接停止。</li>
  * </ol>
  *
- * <p>所有网络回调由单线程执行器串行化，心跳由独立的单线程调度器驱动；事件通过构造时传入的
- * {@code Consumer<BotEvent>} 回调派发，因此本类不依赖任何框架：非 Spring 宿主直接 new 出来用即可，
- * Spring 宿主由 {@code kohaku-spring-boot-autoconfigure} 把回调接到容器事件、
- * 并用 {@code SmartLifecycle} 适配 {@link #start()} / {@link #stop()}。
+ * <p>线程模型：三个执行器各司其职——{@code qq-gateway-io} 单线程负责 WebSocket 收帧与协议/控制帧
+ * （Hello、心跳 ACK、重连指令），{@code qq-gateway-scheduler} 单线程负责心跳与重连排程，
+ * {@code qq-gateway-dispatch} 单线程负责把事件派发给业务监听器（保序）。业务 handler 在派发线程上执行，
+ * 不阻塞收帧与心跳，因此单个 handler 再慢也不会把健康连接误判为僵尸；但派发线程是单线程，一个慢
+ * handler 会拖慢其后的所有事件，耗时逻辑（DB / LLM / 慢 REST 调用）应在业务侧自行异步化。
+ *
+ * <p>事件通过构造时传入的 {@code Consumer<BotEvent>} 回调派发，因此本类不依赖任何框架：
+ * 非 Spring 宿主直接 new 出来用即可，Spring 宿主由 {@code kohaku-spring-boot-autoconfigure}
+ * 把回调接到容器事件、并用 {@code SmartLifecycle} 适配 {@link #start()} / {@link #stop()}。
  */
 public class QqGatewayClient {
 
@@ -55,6 +62,11 @@ public class QqGatewayClient {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(15);
     private static final Duration HELLO_TIMEOUT = Duration.ofSeconds(20);
     private static final long DEFAULT_HEARTBEAT_INTERVAL_MS = 45_000;
+    /**
+     * 事件派发队列容量：业务处理慢于事件到达时先在这里积压，超过容量即丢弃并告警，
+     * 避免无界增长拖垮进程。
+     */
+    private static final int DISPATCH_QUEUE_CAPACITY = 4096;
 
     private final KohakuConfig config;
     private final QqGatewayApi gatewayApi;
@@ -68,6 +80,8 @@ public class QqGatewayClient {
     private volatile boolean running;
     private HttpClient httpClient;
     private ExecutorService callbackExecutor;
+    /** 事件派发线程（单线程，保序）：业务 handler 在这里执行，不占用网络读循环。 */
+    private volatile ExecutorService dispatchExecutor;
     private ScheduledExecutorService scheduler;
 
     /** 当前活跃连接，同时作为丢弃陈旧回调的身份标识。 */
@@ -99,6 +113,9 @@ public class QqGatewayClient {
             running = true;
             callbackExecutor = Executors.newSingleThreadExecutor(r -> clientThread(r, "qq-gateway-io"));
             scheduler = Executors.newSingleThreadScheduledExecutor(r -> clientThread(r, "qq-gateway-scheduler"));
+            dispatchExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                    new ArrayBlockingQueue<>(DISPATCH_QUEUE_CAPACITY),
+                    r -> clientThread(r, "qq-gateway-dispatch"));
             httpClient = HttpClient.newBuilder()
                     .executor(callbackExecutor)
                     .connectTimeout(CONNECT_TIMEOUT)
@@ -450,7 +467,31 @@ public class QqGatewayClient {
 
     // ------------------------------------------------------------------ 辅助
 
+    /**
+     * 把事件投给专用的派发线程：读循环只负责收帧与心跳/控制帧，业务 handler 的耗时不占用它，
+     * 因而不会延迟 HEARTBEAT_ACK 的处理；单线程执行器保证事件之间顺序不变。
+     *
+     * <p>队列有界：业务慢于事件到达时，队列满后丢弃并告警，避免无界积压。
+     */
     private void publish(BotEvent event) {
+        ExecutorService executor = dispatchExecutor;
+        if (executor == null) {
+            return;   // 客户端已停止
+        }
+        try {
+            executor.execute(() -> dispatch(event));
+        } catch (RejectedExecutionException e) {
+            if (executor.isShutdown()) {
+                log.debug("gateway event {} dropped, dispatch executor is shut down",
+                        event.getClass().getSimpleName());
+            } else {
+                log.warn("网关事件派发队列已满（容量 {}），丢弃 {}：业务处理速度跟不上事件到达速度，"
+                        + "请把耗时逻辑改为异步执行", DISPATCH_QUEUE_CAPACITY, event.getClass().getSimpleName());
+            }
+        }
+    }
+
+    private void dispatch(BotEvent event) {
         try {
             listener.accept(event);
         } catch (RuntimeException e) {
@@ -469,6 +510,10 @@ public class QqGatewayClient {
     }
 
     private void shutdownExecutors() {
+        if (dispatchExecutor != null) {
+            dispatchExecutor.shutdownNow();
+            dispatchExecutor = null;
+        }
         if (scheduler != null) {
             scheduler.shutdownNow();
             scheduler = null;

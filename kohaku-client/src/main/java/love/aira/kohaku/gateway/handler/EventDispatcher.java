@@ -19,8 +19,10 @@ import org.slf4j.LoggerFactory;
  *       （Spring 下即把事件发布为容器事件，供 {@code @EventListener} 使用）。</li>
  * </ul>
  *
- * <p>观察者在调用线程上同步执行、按事件先后顺序调用，且总在链之后；它不应阻塞（Spring 下即网关读循环线程），
- * 耗时逻辑请自行异步化。
+ * <p>处理链与观察者都**在调用 {@code dispatch} 的线程上同步执行**，按事件先后顺序调用；观察者总在链之后。
+ * 在 Spring starter 中，该线程是网关专用的单线程派发器（{@code qq-gateway-dispatch}），不是网络读循环，
+ * 因此慢 handler 不会拖垮长连接；但派发是单线程保序的，**耗时逻辑（DB / LLM / 慢 REST）应在业务侧自行
+ * 异步化**，否则会串行阻塞后续事件。
  *
  * <p>顺序由调用方决定：纯 Java 场景即 {@link #EventDispatcher(List, Consumer)} 传入的列表顺序；
  * Spring 场景由 {@code kohaku.qq.handler-order}（Bean 名称列表）优先，其余按 {@code @Order}/{@code Ordered}。
