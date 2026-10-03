@@ -128,16 +128,20 @@ public final class InteractionRouter implements BotEventHandler<InteractionCreat
             }
             throw e;
         }
-        if (ackMode == InteractionAckMode.AFTER_HANDLING && result == HandlerResult.CONSUMED) {
+        if (ackMode == InteractionAckMode.AFTER_HANDLING && result.isConsumed()) {
             respond(payload, InteractionResponder.CODE_SUCCESS);
         }
         return result;
     }
 
-    /** 异步执行处理器：异常只记录（应答已完成，没有链条需要传播）。 */
+    /** 异步执行处理器：异常只记录（应答已完成，没有链条需要传播）；随后执行其结果携带的异步副作用。 */
     private void runHandler(ButtonHandler handler, FeatureContext context, InteractionCreate payload) {
         try {
-            handler.onButton(context);
+            HandlerResult result = handler.onButton(context);
+            Runnable after = result.after();
+            if (after != null) {
+                after.run();
+            }
         } catch (RuntimeException e) {
             log.error("按钮处理失败 interaction_id={} feature={} action={}", payload.id(),
                     context.button().featureId(), context.button().action(), e);

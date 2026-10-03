@@ -189,6 +189,49 @@ class InteractionRouterTest {
         }
     }
 
+    @Test
+    void immediateModeWithExecutorRunsButtonResultAction() throws Exception {
+        List<String> order = new CopyOnWriteArrayList<>();
+        CountDownLatch done = new CountDownLatch(1);
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            card.result = HandlerResult.consumed(() -> {
+                order.add("async-action");
+                done.countDown();
+            });
+            InteractionRouter acking = new InteractionRouter(List.of(card),
+                    (id, code) -> order.add("ack:" + id + ":" + code), InteractionAckMode.IMMEDIATE, executor);
+
+            assertThat(acking.handle(click("card:next:p=2", 11, 2, "USER", null))).isEqualTo(HandlerResult.CONSUMED);
+            assertThat(done.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(order).contains("async-action");
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void dispatcherRunsButtonResultActionWhenRouterHasNoExecutor() throws Exception {
+        List<String> order = new CopyOnWriteArrayList<>();
+        CountDownLatch done = new CountDownLatch(1);
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            card.result = HandlerResult.consumed(() -> {
+                order.add("async-action");
+                done.countDown();
+            });
+            // 同步路由（router 无执行器）→ 结果携带的动作由外层 EventDispatcher 的 worker 池执行
+            EventDispatcher dispatcher = new EventDispatcher(List.of(router), event -> { }, executor);
+
+            dispatcher.dispatch(click("card:next:p=2", 11, 2, "USER", null));
+
+            assertThat(done.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(order).containsExactly("async-action");
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
     private static boolean waitFor(java.util.function.BooleanSupplier condition) throws InterruptedException {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
         while (System.nanoTime() < deadline) {

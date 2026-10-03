@@ -234,25 +234,30 @@ public class PageFeature {
 
 事件在**专用的单线程** `qq-gateway-dispatch` 上派发给处理链与 `@EventListener`：它不占用网关读循环，
 所以单个 handler 再慢也不会延迟心跳 ACK、不会把健康连接误判为僵尸（心跳由独立的 `qq-gateway-scheduler`
-驱动，读循环只负责收帧与控制帧）。但派发是**单线程且保序**的，一个慢 handler 会串行拖住它后面的所有事件 ——
-内置的 `BotReplies` 与示例 handler 都是同步阻塞的上行 REST，直接在消息入口里做 DB / LLM / 慢调用会拖慢整条链。
+驱动，读循环只负责收帧与控制帧）。但派发是**单线程且保序**的，一个慢 handler 会串行拖住它后面的所有事件。
 
-推荐做法：消息入口只做快速判断（命中命令、取参数），把耗时逻辑丢进自己的线程池再做回复。
-starter 已提供 `kohakuHandlerExecutor`（`ExecutorService` Bean，默认 1 线程保序，可用
-`kohaku.qq.handler-threads` 调整；按钮回调默认就先应答、再丢进它执行），可直接注入复用：
+**耗时逻辑用 `HandlerResult.consumed(action)` 一行异步化**：路由判定保持同步，副作用交给框架的工作线程池
+（`kohakuHandlerExecutor`，默认 1 线程保序、可用 `kohaku.qq.handler-threads` 调整），无需自己注入线程池：
 
 ```java
 @Bean
-BotFeature slow(BotReplies replies,
-                @Qualifier("kohakuHandlerExecutor") ExecutorService workers) {
+BotFeature slow(BotReplies replies) {
     return BotFeature.of("slow")
             .message(GroupAtMessageCreateEvent.class, event -> {
-                workers.execute(() -> replies.markdown(event, render(), keyboard())); // 耗时逻辑离开派发线程
-                return HandlerResult.CONSUMED;
+                if (!isMine(event)) {
+                    return HandlerResult.IGNORED;            // 同步路由：让给后面的处理器
+                }
+                return HandlerResult.consumed(() ->          // 异步副作用：DB / LLM / 慢 REST 放这里
+                        replies.markdown(event, render(), keyboard()));
             })
             .build();
 }
 ```
+
+按钮回调同理：`ButtonHandler` 返回 `HandlerResult.consumed(action)` 时，动作同样在该线程池上执行
+（按钮路径本来就先应答、后处理）。默认 1 线程时副作用按提交顺序执行、事件顺序不变；把
+`kohaku.qq.handler-threads` 调大后顺序不再保证。需要完全自管线程池时，注入 `kohakuHandlerExecutor`
+或自己的 `ExecutorService` 即可。
 
 从别的线程回复是安全的：`BotReplies` 的目标与 `msg_id`/`msg_seq`/`event_id` 全部取自入站事件本身，
 AccessToken 刷新与被动回复记账也都做了并发保护。

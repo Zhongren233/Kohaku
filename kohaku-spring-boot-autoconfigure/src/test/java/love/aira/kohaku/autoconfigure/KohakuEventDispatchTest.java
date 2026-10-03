@@ -76,6 +76,18 @@ class KohakuEventDispatchTest {
     }
 
     @Test
+    void consumedWithActionRunsOnWorkerPool() throws Exception {
+        runner.withUserConfiguration(AsyncActionHandlerConfiguration.class).run(context -> {
+            context.getBean(EventDispatcher.class).dispatch(c2c());
+
+            AsyncActionHandler handler = context.getBean(AsyncActionHandler.class);
+            assertThat(CALLS).containsExactly("async");                        // 路由同步完成、链在消费处终止
+            assertThat(handler.done.await(5, TimeUnit.SECONDS)).isTrue();      // 副作用异步执行
+            assertThat(handler.threadName).startsWith("kohaku-handler");        // 用的是 starter 的工作线程池
+        });
+    }
+
+    @Test
     void handlerOrderPropertyOverridesSpringOrder() {
         runner.withPropertyValues("kohaku.qq.handler-order=betaHandler,alphaHandler")
                 .withUserConfiguration(IgnoringHandlers.class, ObserverRecorderConfiguration.class)
@@ -325,6 +337,34 @@ class KohakuEventDispatchTest {
         @Bean
         ObserverRecorder observerRecorder() {
             return new ObserverRecorder();
+        }
+    }
+
+    /** 返回 {@link HandlerResult#consumed(Runnable)}：路由同步、副作用应落到 starter 的工作线程池。 */
+    static class AsyncActionHandler implements BotEventHandler<C2cMessageCreateEvent> {
+
+        final CountDownLatch done = new CountDownLatch(1);
+        volatile String threadName;
+
+        @Override
+        public Class<C2cMessageCreateEvent> eventType() {
+            return C2cMessageCreateEvent.class;
+        }
+
+        @Override
+        public HandlerResult handle(C2cMessageCreateEvent event) {
+            CALLS.add("async");
+            return HandlerResult.consumed(() -> {
+                threadName = Thread.currentThread().getName();
+                done.countDown();
+            });
+        }
+    }
+
+    static class AsyncActionHandlerConfiguration {
+        @Bean
+        AsyncActionHandler asyncActionHandler() {
+            return new AsyncActionHandler();
         }
     }
 }
